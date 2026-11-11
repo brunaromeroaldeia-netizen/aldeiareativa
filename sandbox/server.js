@@ -23,7 +23,7 @@ import dashboardRoutes from '../server/routes/dashboard.js';
 import reportRoutes from '../server/routes/reports.js';
 
 export const TEST_USERS = [
-  { name: 'Administradora', email: 'admin@aldeia.teste', role: 'admin', password: 'Admin2026teste', label: 'Administradora' },
+  { name: 'Bruna', email: 'admin@aldeia.teste', role: 'admin', password: 'Admin2026teste', label: 'Bruna (administradora)' },
   { name: 'Letícia', email: 'leticia@aldeia.teste', role: 'vendedora', password: 'Leticia2026teste', label: 'Letícia (vendedora)' },
   { name: 'Giovana', email: 'giovana@aldeia.teste', role: 'vendedora', password: 'Giovana2026teste', label: 'Giovana (vendedora)' },
 ];

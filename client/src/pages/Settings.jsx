@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { UserPlus, Link2, Copy, Database, FlaskConical, Trash2, ShieldCheck } from 'lucide-react';
+import { UserPlus, Link2, Copy, Database, FlaskConical, Trash2, ShieldCheck, Pencil } from 'lucide-react';
 import { api, download, copyText } from '../lib/api.js';
 import { useAuth } from '../lib/context.jsx';
 import { fmtDateTime } from '../lib/format.js';
@@ -45,7 +45,8 @@ function LinkBox({ link, onClose, title }) {
 }
 
 function UsersTab() {
-  const { user: me } = useAuth();
+  const { user: me, refresh: refreshMe } = useAuth();
+  const [editing, setEditing] = useState(null);
   const toast = useToast();
   const qc = useQueryClient();
   const [confirm, confirmDialog] = useConfirm();
@@ -88,6 +89,7 @@ function UsersTab() {
                   <td className="px-2">{u.role === 'admin' ? 'Administradora' : 'Vendedora'}</td>
                   <td className="px-2 text-muted">{fmtDateTime(u.last_login_at)}</td>
                   <td className="px-5 text-right whitespace-nowrap">
+                    <Button size="sm" variant="ghost" icon={Pencil} onClick={() => setEditing({ id: u.id, name: u.name, email: u.email })}>Editar</Button>
                     <Button size="sm" variant="ghost" icon={Link2} onClick={() => resetLink(u)}>Link de senha</Button>
                     {u.id !== me.id && <Button size="sm" variant="ghost" onClick={() => toggle(u)}>{u.active ? 'Desativar' : 'Reativar'}</Button>}
                   </td>
@@ -106,6 +108,17 @@ function UsersTab() {
         </div>
       </Modal>
       {link && <LinkBox {...link} onClose={() => setLink(null)} />}
+      <Modal open={!!editing} onClose={() => setEditing(null)} title="Editar usuária"
+        footer={<><Button onClick={() => setEditing(null)}>Cancelar</Button><Button variant="primary" disabled={!editing?.name?.trim() || !editing?.email?.trim()} onClick={async () => {
+          try { await api.patch(`/users/${editing.id}`, { name: editing.name, email: editing.email }); toast('Usuária atualizada'); if (editing.id === me.id) await refreshMe(); setEditing(null); refresh(); } catch (e) { toast(e.message, 'error'); }
+        }}>Salvar</Button></>}>
+        {editing && (
+          <div className="space-y-3">
+            <Field label="Nome" hint="O primeiro nome aparece nas mensagens ({{vendedora}}) de quem abrir o contato."><Input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} /></Field>
+            <Field label="E-mail (login)"><Input type="email" value={editing.email} onChange={(e) => setEditing({ ...editing, email: e.target.value })} /></Field>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

@@ -148,7 +148,7 @@ function TemplateModal({ template, campaignId, campaign, onClose, onSaved }) {
             <div className="flex flex-wrap gap-1.5">
               {variables.map((v) => <button key={v.key} type="button" onClick={() => insertVar(v.key)} className="h-7 px-2 rounded-md bg-stone-100 hover:bg-stone-200 text-[12px] font-mono">{`{{${v.key}}}`}</button>)}
             </div>
-            <p className="text-[12px] text-muted mt-2">Texto alternativo quando faltar o dado: <code className="font-mono">{'{{empresa|sua empresa}}'}</code>. Sem nome, “Oi, {'{{primeiro_nome}}'}!” vira “Oi!”.</p>
+            <p className="text-[12px] text-muted mt-2"><code className="font-mono">{'{{vendedora}}'}</code> usa o nome de quem abrir o contato para enviar. Texto alternativo quando faltar o dado: <code className="font-mono">{'{{empresa|sua empresa}}'}</code>. Sem nome, “Oi, {'{{primeiro_nome}}'}!” vira “Oi!”.</p>
           </div>
         </div>
         <div className="space-y-3">

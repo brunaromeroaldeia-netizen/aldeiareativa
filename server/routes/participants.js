@@ -97,7 +97,8 @@ r.get('/:id', ah(async (req, res) => {
   const warnings = await contactWarnings(p.contact_id, p.campaign_id, Number(settings.janela_abordagem_recente_dias ?? 30));
   if (contact.do_not_contact) warnings.unshift({ level: 'danger', msg: 'Contato pediu para não receber comunicações (opt-out). Não envie mensagens.' });
   const templateId = req.query.template_id ? Number(req.query.template_id) : null;
-  const message = await buildMessage(p, contact, opportunity, seller || req.user, settings, templateId);
+  // {{vendedora}} = quem abriu o contato (é quem vai copiar e enviar), nunca o responsável antigo
+  const message = await buildMessage(p, contact, opportunity, req.user, settings, templateId);
   const t = today();
   res.json({
     participant: { ...p, next_action: nextAction({ ...p, next_due: followups.find((f) => f.status === 'pendente')?.due_date, next_due_type: followups.find((f) => f.status === 'pendente')?.type }, t) },

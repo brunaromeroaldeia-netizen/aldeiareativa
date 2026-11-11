@@ -67,7 +67,7 @@ test('fluxo completo de reativação e regras de negócio', { skip }, async () =
   assert.equal((await admin.call('GET', `/campaigns/${cid}/eligibility`)).data.total.eligible, 4);
   assert.equal((await admin.call('POST', `/campaigns/${cid}/participants`, {})).data.added, 4);
   assert.equal((await admin.call('POST', `/campaigns/${cid}/status`, { action: 'ativar' })).status, 400); // sem mensagem
-  await admin.call('POST', '/templates', { campaign_id: cid, name: 'Inicial', kind: 'inicial', step: 1, product_id: mesa, ref_year: 2024, historical_status: 'perdido', body: 'Oi, {{primeiro_nome}}! Tudo bem? 😊' });
+  await admin.call('POST', '/templates', { campaign_id: cid, name: 'Inicial', kind: 'inicial', step: 1, product_id: mesa, ref_year: 2024, historical_status: 'perdido', body: 'Oi, {{primeiro_nome}}! Tudo bem? 😊 Aqui é a {{vendedora}}.' });
   await admin.call('POST', '/templates', { campaign_id: cid, name: 'FU', kind: 'followup', step: 2, product_id: null, ref_year: null, historical_status: null, body: 'Oi, {{primeiro_nome}}! Conseguiu ver?' });
   assert.equal((await admin.call('POST', `/campaigns/${cid}/distribute`, { method: 'igual' })).data.changed, 4);
   assert.equal((await admin.call('POST', `/campaigns/${cid}/status`, { action: 'ativar' })).status, 200);
@@ -82,7 +82,9 @@ test('fluxo completo de reativação e regras de negócio', { skip }, async () =
   // mensagem personalizada
   const p = mine[0];
   const det = (await leti.call('GET', `/participants/${p.id}`)).data;
-  assert.match(det.message.text, new RegExp(`^Oi, ${p.full_name.split(' ')[0]}! Tudo bem\\? 😊$`));
+  assert.match(det.message.text, new RegExp(`^Oi, ${p.full_name.split(' ')[0]}! Tudo bem\\? 😊 Aqui é a Letícia\\.$`));
+  // a administradora abrindo o mesmo contato vê o próprio nome
+  assert.match((await admin.call('GET', `/participants/${p.id}`)).data.message.text, /Aqui é a Admin\.$/);
 
   // copiar não conta como envio
   await leti.call('POST', `/participants/${p.id}/copy`, {});

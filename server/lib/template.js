@@ -6,7 +6,7 @@ export const VARIABLES = [
   { key: 'empresa', label: 'Empresa', fallback: 'sua empresa' },
   { key: 'produto', label: 'Produto', fallback: 'nossos espaços' },
   { key: 'unidade', label: 'Unidade', fallback: 'Aldeia' },
-  { key: 'vendedora', label: 'Vendedora', fallback: 'equipe Aldeia' },
+  { key: 'vendedora', label: 'Nome de quem envia', fallback: 'equipe Aldeia' },
   { key: 'campanha', label: 'Campanha', fallback: '' },
   { key: 'ano', label: 'Ano da base', fallback: '' },
 ];
