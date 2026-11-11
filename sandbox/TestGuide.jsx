@@ -59,7 +59,23 @@ const STEPS = [
     ],
   },
   {
-    title: '6. Encerrar e limpar',
+    title: '6. Campanha Black Friday — Mesa / Plano Full',
+    who: 'Letícia, Giovana e administradora',
+    items: [
+      ['Campanhas › Black Friday: ver os 5 modelos em Mensagens e as condições comerciais no Resumo', '/campanhas'],
+      ['Contato perdido recebe “Inicial — Leads Perdidos”; aberto recebe “Inicial — Leads Abertos” (qualquer ano)', '/operacao?queue=para_enviar'],
+      ['Ex-cliente marcado como “Ex-cliente (não é mais cliente)” recebe “Inicial — Ex-clientes de Mesa”', '/operacao?queue=para_enviar'],
+      ['Ex-cliente “Não confirmada” ou “Cliente ativo” não recebe mensagem automática (aviso na ficha)', '/operacao?queue=para_enviar'],
+      ['A mensagem traz o nome da vendedora responsável, mesmo aberta pela administradora', '/operacao'],
+      ['Confirmar envio da inicial agenda o Follow-up 1 para 3 dias; o do Follow-up 1 agenda o Follow-up 2 entre 3 e 5 dias', '/operacao'],
+      ['Aba “Atrasados”: título “Follow-up 1 (2ª abordagem)” com o modelo “Follow-up 1 — Retomada”', '/operacao?queue=atrasados'],
+      ['Trocar para um modelo de outra etapa: aparece aviso e o envio fica bloqueado até confirmar', '/operacao?queue=atrasados'],
+      ['Registrar “Respondeu” ou “Tem interesse” e ver o follow-up cancelado', '/operacao'],
+      ['Nenhum follow-up é agendado depois de 30/11/2026', '/followups'],
+    ],
+  },
+  {
+    title: '7. Encerrar e limpar',
     who: 'Administradora',
     items: [
       ['Encerrar uma campanha e consultá-la em Campanhas › Encerradas', '/campanhas?tab=encerradas'],

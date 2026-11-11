@@ -120,3 +120,12 @@ npm run build:teste    # gera dist-teste/ (página única + arquivos do banco)
 - Código exclusivo do teste: `sandbox/` (adaptadores do Node para o navegador, usuárias de teste, guia de testes) e `vite.sandbox.config.js`. Nada disso entra no build de produção (`npm run build` → `dist/`).
 - Usuárias de teste (só existem nesta versão): `admin@aldeia.teste`, `leticia@aldeia.teste`, `giovana@aldeia.teste`.
 - Os dados ficam no navegador de quem testa (IndexedDB). “Reiniciar ambiente de testes” recria a base de demonstração.
+
+## Campanha Black Friday — Mesa / Plano Full (novembro de 2026)
+
+Pacote com 5 modelos (3 iniciais por status histórico, 2 follow-ups), condições comerciais e regras de sequência (follow-up 1 em 3 dias, follow-up 2 entre 3 e 5 dias, encerramento sem resposta 3 dias após a última tentativa, nenhum follow-up após 30/11/2026). O pacote vale apenas para essa campanha.
+
+- Versão de testes: aplicado automaticamente uma única vez à campanha Black Friday de Mesa existente, preservando contatos, envios e históricos.
+- Versão oficial: depois de criar a campanha, rode `npm run pacote:black-friday` (ou `npm run pacote:black-friday -- <id da campanha>`).
+- `{{vendedora}}` é a vendedora responsável pelo contato. Sem responsável, a cópia e o envio ficam bloqueados até a atribuição.
+- O modelo de ex-clientes só é sugerido quando a ficha do contato está marcada como “Ex-cliente (não é mais cliente)”. Clientes ativos não entram na campanha e não recebem mensagem automática.

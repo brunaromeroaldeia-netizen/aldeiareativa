@@ -25,7 +25,7 @@ export async function eligibilitySql(campaign, { extraWhere = '' } = {}) {
          AND (cardinality($4::text[]) = 0 OR COALESCE(o.lost_reason,'(sem motivo)') = ANY($4::text[]))
        ORDER BY o.contact_id, o.ref_year DESC NULLS LAST, o.id DESC
     ), flags AS (
-      SELECT opp.*, ct.do_not_contact AS dnc,
+      SELECT opp.*, ct.do_not_contact AS dnc, (ct.client_status = 'ativo') IS TRUE AS active_client,
         EXISTS (SELECT 1 FROM campaign_contacts x WHERE x.campaign_id = $5 AND x.contact_id = opp.contact_id) AS already,
         EXISTS (SELECT 1 FROM campaign_contacts x JOIN campaigns c2 ON c2.id = x.campaign_id
                  WHERE x.contact_id = opp.contact_id AND x.campaign_id <> $5 AND c2.status IN ('ativa','pausada')
@@ -41,6 +41,7 @@ export async function eligibilitySql(campaign, { extraWhere = '' } = {}) {
        ${previous === 'nunca_abordados' ? 'AND NOT approached_before' : ''}
        ${previous === 'ja_abordados' ? 'AND approached_before' : ''}
        ${f.exclude_converted ? 'AND NOT converted_before' : ''}
+       ${f.exclude_active_clients !== false ? 'AND NOT active_client' : ''}
        ${extraWhere}`;
   return { sql, params, recentDays, excludeActive: f.exclude_active_campaigns !== false };
 }

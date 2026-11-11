@@ -255,6 +255,18 @@ export function ContactDetail() {
           <Row label="Telefone">{c.phone || '—'}</Row>
           <Row label="E-mail">{c.email || '—'}</Row>
           <Row label="Empresa">{c.company || '—'}</Row>
+          <Row label="Situação atual como cliente">
+            {!c.anonymized_at ? (
+              <Select className="!h-8 text-[13px] mt-0.5" value={c.client_status || ''} onChange={async (e) => {
+                try { await api.post(`/contacts/${id}/client-status`, { status: e.target.value || null }); toast('Situação do cliente atualizada'); refresh(); } catch (err) { toast(err.message, 'error'); }
+              }}>
+                <option value="">Não confirmada</option>
+                <option value="inativo">Ex-cliente (não é mais cliente)</option>
+                <option value="ativo">Cliente ativo</option>
+              </Select>
+            ) : '—'}
+            {c.client_status_at && <span className="block text-[11.5px] text-muted mt-0.5">Atualizada em {fmtDateTime(c.client_status_at)}{c.client_status_by_name ? ` por ${c.client_status_by_name}` : ''}</span>}
+          </Row>
           <Row label="Origem">{c.source === 'manual' ? 'Cadastro manual' : c.source === 'demo' ? 'Demonstração' : 'Importação'}</Row>
           <Row label="Cadastrado em">{fmtDateTime(c.created_at)}</Row>
           {c.notes && <Row label="Observações"><span className="whitespace-pre-line">{c.notes}</span></Row>}

@@ -87,7 +87,7 @@ function Summary({ c }) {
   const drill = (metric) => nav(`/operacao${qs({ campaign_id: c.id, metric })}`);
   return (
     <div className="space-y-5">
-      {c.promo_description && <Card className="px-5 py-4"><p className="text-[12px] text-muted mb-1">Condição comercial</p><p className="text-sm whitespace-pre-line">{c.promo_description}</p></Card>}
+      {c.promo_description && <Card className="px-5 py-4"><p className="text-[12px] text-muted mb-1">Condições comerciais (visíveis para as vendedoras na ficha de cada contato)</p><p className="text-sm whitespace-pre-line">{c.promo_description}</p></Card>}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
         <Kpi label="Participantes" value={fmtInt(s.participants)} sub={c.goal_contacts ? `meta ${fmtInt(c.goal_contacts)}` : null} />
         <Kpi label="Trabalhados" value={fmtInt(s.worked)} sub={`${fmtInt(s.pending)} pendentes`} onClick={() => drill('trabalhados')} />
@@ -156,8 +156,13 @@ function Summary({ c }) {
         </div>
       </Card>
       <Card className="px-5 py-4 text-sm text-muted grid sm:grid-cols-3 gap-2">
-        <p>Follow-up: <b className="text-ink">{c.followup_days} dias</b> após cada envio sem resposta</p>
-        <p>Limite: <b className="text-ink">{c.max_attempts} abordagens</b> por contato</p>
+        {Array.from({ length: Math.max(0, c.max_attempts - 1) }, (_, i) => i + 2).map((step) => {
+          const r = c.followup_schedule?.steps?.find((x) => x.step === step) || { min: c.followup_days, max: c.followup_days };
+          return <p key={step}>Follow-up {step - 1}: <b className="text-ink">{r.min === r.max ? `${r.min} dias` : `${r.min} a ${r.max} dias`}</b> após o envio anterior, sem resposta</p>;
+        })}
+        <p>Limite: <b className="text-ink">{c.max_attempts} abordagens</b> · encerra sem resposta após <b className="text-ink">{c.followup_schedule?.close_after_days ?? c.followup_days} dias</b></p>
+        {c.end_date && <p>Nenhum follow-up depois de <b className="text-ink">{fmtDate(c.end_date)}</b></p>}
+        {c.filters?.exclude_active_clients !== false && <p>Clientes ativos não entram na campanha</p>}
         <p>Vendedoras: <b className="text-ink">{c.sellers.map((x) => x.name).join(', ') || '—'}</b></p>
         {c.filters?.exclude_recent_days ? <p>Exclui abordados nos últimos <b className="text-ink">{c.filters.exclude_recent_days} dias</b></p> : null}
         {c.filters?.lost_reasons?.length ? <p>Motivos de perda: <b className="text-ink">{c.filters.lost_reasons.join(', ')}</b></p> : null}

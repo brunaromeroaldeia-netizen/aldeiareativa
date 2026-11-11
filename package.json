@@ -17,7 +17,8 @@
     "demo:remove": "node scripts/demo.js remove",
     "backup": "node scripts/backup.js",
     "test": "node --test tests/*.test.js",
-    "build:teste": "node scripts/build-sandbox.js"
+    "build:teste": "node scripts/build-sandbox.js",
+    "pacote:black-friday": "node scripts/campanha-black-friday.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

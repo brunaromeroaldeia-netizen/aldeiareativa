@@ -83,8 +83,8 @@ test('fluxo completo de reativação e regras de negócio', { skip }, async () =
   const p = mine[0];
   const det = (await leti.call('GET', `/participants/${p.id}`)).data;
   assert.match(det.message.text, new RegExp(`^Oi, ${p.full_name.split(' ')[0]}! Tudo bem\\? 😊 Aqui é a Letícia\\.$`));
-  // a administradora abrindo o mesmo contato vê o próprio nome
-  assert.match((await admin.call('GET', `/participants/${p.id}`)).data.message.text, /Aqui é a Admin\.$/);
+  // a administradora abrindo o mesmo contato vê o nome da vendedora responsável
+  assert.match((await admin.call('GET', `/participants/${p.id}`)).data.message.text, /Aqui é a Letícia\.$/);
 
   // copiar não conta como envio
   await leti.call('POST', `/participants/${p.id}/copy`, {});
@@ -98,7 +98,8 @@ test('fluxo completo de reativação e regras de negócio', { skip }, async () =
   assert.equal((await leti.call('POST', `/participants/${p.id}/send`, { message_text: 'x', expected_attempts: 0 })).status, 409);
 
   // follow-up vence (simulação de 3 dias) e aparece como atrasado / pendente
-  await db.query(`UPDATE followups SET due_date = due_date - 4 WHERE campaign_contact_id=$1`, [p.id]);
+  await db.query(`UPDATE followups SET due_date = due_date - 4, due_until = due_until - 4 WHERE campaign_contact_id=$1`, [p.id]);
+  await db.query(`UPDATE campaign_contacts SET last_sent_at = last_sent_at - interval '4 days' WHERE id=$1`, [p.id]);
   await mod.scheduler.runScheduler();
   assert.equal((await db.one('SELECT status FROM campaign_contacts WHERE id=$1', [p.id])).status, 'followup_pendente');
   assert.equal((await leti.call('GET', `/participants/queues?campaign_id=${cid}`)).data.atrasados, 1);
@@ -203,4 +204,144 @@ test('reimportação: atualiza a situação de oportunidades existentes sem dupl
   const fourth = await importRows([row('', '')], 'parcial.xlsx');
   assert.equal(fourth.stats.opp_updates, 0);
   assert.equal(fourth.stats.dup_opportunities, 1);
+});
+
+
+test('Black Friday de Mesa: modelos por segmento, vendedora responsável, etapas e sequência', { skip }, async () => {
+  const { applyBlackFridayPackage } = await import('../server/services/blackFriday.js');
+  const { addDays, today } = mod.dates;
+  const T = today();
+  const admin = client(); const leti = client(); const gio = client();
+  await admin.login('admin@t.local'); await leti.login('leticia@t.local'); await gio.login('giovana@t.local');
+  const users = (await admin.call('GET', '/users')).data;
+  const L = users.find((u) => u.name === 'Letícia').id; const G = users.find((u) => u.name === 'Giovana').id;
+  const mesa = (await admin.call('GET', '/products')).data.find((p) => p.name.startsWith('Mesa')).id;
+  const salas = (await admin.call('GET', '/products')).data.find((p) => p.name.startsWith('Salas')).id;
+  const mk = async (name, phone, opp) => (await admin.call('POST', '/contacts', { full_name: name, phone, opportunity: { product_id: mesa, ...opp } })).data.id;
+  const ids = {
+    exConf: await mk('Ana Paula Souza', '(41) 97000-0001', { created_date: '2025-02-01', won_date: '2025-02-10' }),
+    exAtivo: await mk('Bruno Ativo', '(41) 97000-0002', { created_date: '2024-05-01', won_date: '2024-05-10' }),
+    exNaoConf: await mk('Clara Duvida', '(41) 97000-0003', { created_date: '2024-06-01', won_date: '2024-06-10' }),
+    perdido24: await mk('Diego Perdido', '(41) 97000-0004', { created_date: '2024-03-01', lost_date: '2024-03-20' }),
+    aberto25: await mk('Eva Aberta', '(41) 97000-0005', { created_date: '2025-07-01' }),
+    semDona: await mk('Fabio Semdona', '(41) 97000-0006', { created_date: '2026-01-01', lost_date: '2026-01-15' }),
+  };
+  await admin.call('POST', `/contacts/${ids.exConf}/client-status`, { status: 'inativo' });
+  await admin.call('POST', `/contacts/${ids.exAtivo}/client-status`, { status: 'ativo' });
+
+  // outra campanha (Salas) com modelo próprio: não pode ser alterada
+  const other = (await admin.call('POST', '/campaigns', { name: 'Salas Março 2027', product_ids: [salas] })).data.id;
+  await admin.call('POST', '/templates', { campaign_id: other, name: 'Salas inicial', kind: 'inicial', step: 1, product_id: salas, ref_year: null, historical_status: null, body: 'Oi, {{primeiro_nome}}! Salas.' });
+
+  const cid = (await admin.call('POST', '/campaigns', { name: 'Black Friday Mesas', product_ids: [mesa], seller_ids: [L, G] })).data.id;
+  await db.tx(async (c) => applyBlackFridayPackage(c, cid, 1));
+  await db.query(`UPDATE campaigns SET end_date=$2 WHERE id=$1`, [cid, addDays(T, 30)]); // fim relativo ao dia do teste
+  const camp = (await admin.call('GET', `/campaigns/${cid}`)).data;
+  assert.equal(camp.name, 'Black Friday — Mesa / Plano Full — Aldeia Cândido');
+  assert.match(camp.promo_description, /Permanência mínima: seis meses/);
+  const tpls = (await admin.call('GET', `/templates?campaign_id=${cid}`)).data;
+  assert.deepEqual(tpls.map((t) => t.name).sort(), ['Follow-up 1 — Retomada', 'Follow-up 2 — Última Tentativa', 'Inicial — Ex-clientes de Mesa', 'Inicial — Leads Abertos', 'Inicial — Leads Perdidos']);
+  assert.ok(tpls.every((t) => t.ref_year === null), 'sem modelos por ano');
+  // cliente ativo fica fora da campanha
+  const elig = (await admin.call('GET', `/campaigns/${cid}/eligibility`)).data;
+  assert.ok(elig.total.eligible >= 5);
+  await admin.call('POST', `/campaigns/${cid}/participants`, {});
+  const parts = (await admin.call('GET', `/campaigns/${cid}/participants`)).data.rows;
+  const pid = (contactId) => parts.find((x) => x.contact_id === contactId).id;
+  assert.ok(!parts.some((x) => x.contact_id === ids.exAtivo));
+  await admin.call('POST', `/campaigns/${cid}/distribute`, { method: 'manual', participant_ids: [pid(ids.perdido24), pid(ids.exConf)], user_id: L });
+  await admin.call('POST', `/campaigns/${cid}/distribute`, { method: 'manual', participant_ids: [pid(ids.aberto25), pid(ids.exNaoConf)], user_id: G });
+  assert.equal((await admin.call('POST', `/campaigns/${cid}/status`, { action: 'ativar' })).status, 200);
+  const view = async (who, contactId) => (await who.call('GET', `/participants/${pid(contactId)}`)).data;
+
+  // 1, 2, 3, 5, 12: modelo pelo segmento, nome da responsável, etapa
+  let v = await view(leti, ids.perdido24);
+  assert.equal(v.message.template.name, 'Inicial — Leads Perdidos');
+  assert.equal(v.message.stage_label, 'Mensagem inicial (1ª abordagem)');
+  assert.ok(v.message.text.startsWith('Oi, Diego! Tudo bem? 😊\n\nAqui é a Letícia, da Aldeia!'));
+  v = await view(gio, ids.aberto25);
+  assert.equal(v.message.template.name, 'Inicial — Leads Abertos');
+  assert.match(v.message.text, /Aqui é a Giovana, da Aldeia!/);
+  assert.match((await view(admin, ids.aberto25)).message.text, /Aqui é a Giovana, da Aldeia!/, 'independe de quem visualiza');
+  v = await view(leti, ids.exConf);
+  assert.equal(v.message.template.name, 'Inicial — Ex-clientes de Mesa');
+  assert.ok(v.message.text.startsWith('Oi, Ana! Tudo bem?'), 'primeiro nome do contato');
+  // 4: ex-cliente sem confirmação e cliente ativo não recebem automaticamente a mensagem de ex-cliente
+  v = await view(gio, ids.exNaoConf);
+  assert.equal(v.message.template, null);
+  assert.ok(v.message.warnings.some((w) => /sem confirmação/.test(w)));
+  await gio.call('POST', `/contacts/${ids.exNaoConf}/client-status`, { status: 'ativo' });
+  v = await view(gio, ids.exNaoConf);
+  assert.equal(v.message.template, null);
+  assert.ok(v.message.warnings.some((w) => /Cliente ativo/.test(w)));
+  // sem responsável: aviso e envio bloqueado (nunca "Administradora")
+  v = await view(admin, ids.semDona);
+  assert.equal(v.message.needs_seller, true);
+  assert.ok(!/Admin/.test(v.message.text));
+  assert.equal((await admin.call('POST', `/participants/${pid(ids.semDona)}/send`, { message_text: 'x', expected_attempts: 0 })).status, 400);
+
+  // 6: copiar não registra envio
+  const P = pid(ids.perdido24);
+  await leti.call('POST', `/participants/${P}/copy`, {});
+  assert.equal((await db.one(`SELECT count(*)::int AS n FROM interactions WHERE campaign_contact_id=$1 AND type='envio'`, [P])).n, 0);
+  // 7: envio inicial agenda o follow-up 1 para 3 dias corridos
+  v = await view(leti, ids.perdido24);
+  let r = (await leti.call('POST', `/participants/${P}/send`, { message_text: v.message.text, template_id: v.message.template.id, expected_attempts: 0 })).data;
+  assert.equal(r.nextStage, 'Follow-up 1');
+  assert.equal(r.nextDue, addDays(T, 3)); assert.equal(r.nextUntil, addDays(T, 3));
+  // envio repetido logo em seguida é bloqueado
+  v = await view(leti, ids.perdido24);
+  assert.equal((await leti.call('POST', `/participants/${P}/send`, { message_text: 'x', template_id: v.message.template.id, expected_attempts: 1 })).status, 400);
+  const passDays = async (n) => {
+    await db.query(`UPDATE followups SET due_date = due_date - $2::int, due_until = due_until - $2::int WHERE campaign_contact_id=$1 AND status='pendente'`, [P, n]);
+    await db.query(`UPDATE campaign_contacts SET last_sent_at = last_sent_at - make_interval(days => $2::int), no_response_deadline = no_response_deadline - $2::int WHERE id=$1`, [P, n]);
+  };
+  await passDays(3);
+  // 8 e 12: follow-up 1 com o modelo correto e a etapa correta
+  v = await view(leti, ids.perdido24);
+  assert.equal(v.message.stage_label, 'Follow-up 1 (2ª abordagem)');
+  assert.equal(v.message.template.name, 'Follow-up 1 — Retomada');
+  const inicial = tpls.find((t) => t.name === 'Inicial — Leads Perdidos');
+  const wrong = await leti.call('POST', `/participants/${P}/send`, { message_text: 'x', template_id: inicial.id, expected_attempts: 1 });
+  assert.equal(wrong.status, 400, 'modelo de outra etapa exige confirmação');
+  r = (await leti.call('POST', `/participants/${P}/send`, { message_text: v.message.text, template_id: v.message.template.id, expected_attempts: 1 })).data;
+  assert.equal(r.nextStage, 'Follow-up 2');
+  assert.equal(r.nextDue, addDays(T, 3)); assert.equal(r.nextUntil, addDays(T, 5));
+  await passDays(3);
+  // 9: follow-up 2
+  v = await view(leti, ids.perdido24);
+  assert.equal(v.message.stage_label, 'Follow-up 2 (3ª abordagem)');
+  assert.equal(v.message.template.name, 'Follow-up 2 — Última Tentativa');
+  r = (await leti.call('POST', `/participants/${P}/send`, { message_text: v.message.text, template_id: v.message.template.id, expected_attempts: 2 })).data;
+  assert.equal(r.nextDue, null);
+  assert.equal(r.deadline, addDays(T, 3));
+  assert.equal((await db.one(`SELECT count(*)::int AS n FROM followups WHERE campaign_contact_id=$1 AND status='pendente'`, [P])).n, 0, 'sem novos follow-ups após a última tentativa');
+  await passDays(4);
+  assert.equal((await leti.call('POST', `/participants/${P}/send`, { message_text: 'x', expected_attempts: 3, allow_early: true })).status, 400, 'limite de abordagens');
+  // 11: encerra sem resposta após a última abordagem
+  await mod.scheduler.runScheduler();
+  assert.equal((await db.one('SELECT status FROM campaign_contacts WHERE id=$1', [P])).status, 'sem_resposta');
+
+  // 10: resposta cancela follow-ups pendentes
+  const A = pid(ids.aberto25);
+  v = await view(gio, ids.aberto25);
+  await gio.call('POST', `/participants/${A}/send`, { message_text: v.message.text, template_id: v.message.template.id, expected_attempts: 0 });
+  await gio.call('POST', `/participants/${A}/outcome`, { status: 'interesse', note: 'Quer visitar' });
+  assert.equal((await db.one(`SELECT count(*)::int AS n FROM followups WHERE campaign_contact_id=$1 AND status='pendente'`, [A])).n, 0);
+
+  // nenhum follow-up depois do fim da campanha
+  await db.query(`UPDATE campaigns SET end_date=$2 WHERE id=$1`, [cid, addDays(T, 2)]);
+  v = await view(leti, ids.exConf);
+  r = (await leti.call('POST', `/participants/${pid(ids.exConf)}/send`, { message_text: v.message.text, template_id: v.message.template.id, expected_attempts: 0 })).data;
+  assert.equal(r.nextDue, null);
+  assert.equal(r.deadline, addDays(T, 2));
+  assert.match(r.note, /depois do fim da campanha/);
+
+  // 13: outras campanhas e seus modelos preservados
+  const otherT = (await admin.call('GET', `/templates?campaign_id=${other}`)).data;
+  assert.equal(otherT.length, 1); assert.equal(otherT[0].body, 'Oi, {{primeiro_nome}}! Salas.');
+  assert.equal((await admin.call('GET', `/campaigns/${other}`)).data.name, 'Salas Março 2027');
+  // reaplicar o pacote não duplica modelos
+  await db.tx(async (c) => applyBlackFridayPackage(c, cid, 1));
+  assert.equal((await admin.call('GET', `/templates?campaign_id=${cid}`)).data.length, 5);
 });

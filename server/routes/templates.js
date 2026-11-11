@@ -30,6 +30,7 @@ const schema = z.object({
   product_id: z.number().int().nullable(),
   ref_year: z.number().int().nullable(),
   historical_status: z.enum(['ganho', 'perdido', 'aberto', 'revisao']).nullable(),
+  client_status: z.enum(['inativo']).nullable().optional(),
   body: z.string().min(2).max(4000),
 });
 
@@ -50,8 +51,8 @@ r.post('/', requireAdmin, ah(async (req, res) => {
   const d = normalizeStep(parse(schema, req.body));
   await checkCampaignEditable(d.campaign_id);
   const t = await tx(async (c) => {
-    const row = (await c.query(`INSERT INTO message_templates(campaign_id, name, kind, step, product_id, ref_year, historical_status, body, created_by)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`, [d.campaign_id, d.name, d.kind, d.step, d.product_id, d.ref_year, d.historical_status, d.body, req.user.id])).rows[0];
+    const row = (await c.query(`INSERT INTO message_templates(campaign_id, name, kind, step, product_id, ref_year, historical_status, body, created_by, client_status)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`, [d.campaign_id, d.name, d.kind, d.step, d.product_id, d.ref_year, d.historical_status, d.body, req.user.id, d.client_status ?? null])).rows[0];
     await c.query('INSERT INTO message_template_versions(template_id, version, body, created_by) VALUES ($1,1,$2,$3)', [row.id, d.body, req.user.id]);
     return row;
   });
@@ -68,8 +69,8 @@ r.patch('/:id', requireAdmin, ah(async (req, res) => {
   const t = await tx(async (c) => {
     const bodyChanged = d.body !== cur.body;
     const row = (await c.query(`UPDATE message_templates SET name=$2, kind=$3, step=$4, product_id=$5, ref_year=$6, historical_status=$7, body=$8,
-        version = version + $9, updated_at=now() WHERE id=$1 RETURNING *`,
-      [id, d.name, d.kind, d.step, d.product_id, d.ref_year, d.historical_status, d.body, bodyChanged ? 1 : 0])).rows[0];
+        version = version + $9, client_status=$10, updated_at=now() WHERE id=$1 RETURNING *`,
+      [id, d.name, d.kind, d.step, d.product_id, d.ref_year, d.historical_status, d.body, bodyChanged ? 1 : 0, d.client_status ?? null])).rows[0];
     if (bodyChanged) await c.query('INSERT INTO message_template_versions(template_id, version, body, created_by) VALUES ($1,$2,$3,$4)', [id, row.version, d.body, req.user.id]);
     return row;
   });
@@ -100,8 +101,8 @@ r.post('/:id/copy', requireAdmin, ah(async (req, res) => {
   await checkCampaignEditable(campaign_id);
   const t = await one('SELECT * FROM message_templates WHERE id=$1', [id]);
   if (!t) throw notFound();
-  const row = await one(`INSERT INTO message_templates(campaign_id, name, kind, step, product_id, ref_year, historical_status, body, created_by)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`, [campaign_id, t.name, t.kind, t.step, t.product_id, t.ref_year, t.historical_status, t.body, req.user.id]);
+  const row = await one(`INSERT INTO message_templates(campaign_id, name, kind, step, product_id, ref_year, historical_status, body, created_by, client_status)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`, [campaign_id, t.name, t.kind, t.step, t.product_id, t.ref_year, t.historical_status, t.body, req.user.id, t.client_status]);
   await query('INSERT INTO message_template_versions(template_id, version, body, created_by) VALUES ($1,1,$2,$3)', [row.id, t.body, req.user.id]);
   res.json(row);
 }));
@@ -120,10 +121,11 @@ r.post('/preview', ah(async (req, res) => {
     const opportunity = await one('SELECT * FROM opportunities WHERE contact_id=$1 ORDER BY ref_year DESC NULLS LAST, id DESC LIMIT 1', [d.contact_id]);
     const product = opportunity?.product_id ? await one('SELECT name FROM products WHERE id=$1', [opportunity.product_id]) : null;
     const campaign = d.campaign_id ? await one('SELECT name FROM campaigns WHERE id=$1', [d.campaign_id]) : null;
-    data = templateData({ contact, opportunity, product, campaign, seller: req.user, unit: settings.unidade_padrao });
+    const seller = d.campaign_id ? await one(`SELECT u.name FROM campaign_contacts cc JOIN users u ON u.id=cc.assigned_to WHERE cc.campaign_id=$1 AND cc.contact_id=$2`, [d.campaign_id, d.contact_id]) : null;
+    data = templateData({ contact, opportunity, product, campaign, seller, unit: settings.unidade_padrao });
   } else {
     data = { primeiro_nome: 'Mariana', nome_completo: 'Mariana Ferreira', empresa: 'Ferreira Design', produto: 'Mesa / Plano Full',
-      unidade: settings.unidade_padrao, vendedora: req.user.name.split(' ')[0], campanha: 'Campanha', ano: 2024 };
+      unidade: settings.unidade_padrao, vendedora: (await one(`SELECT name FROM users WHERE role='vendedora' AND active ORDER BY name DESC LIMIT 1`))?.name?.split(' ')[0] || 'Letícia', campanha: 'Campanha', ano: 2024 };
   }
   res.json(renderTemplate(d.body, data));
 }));

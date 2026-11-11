@@ -55,21 +55,37 @@ export function templateData({ contact, opportunity, product, campaign, seller, 
   };
 }
 
-/** Escolhe o modelo mais específico para a etapa do contato. */
-export function pickTemplate(templates, { step, product_id, ref_year, historical_status }) {
-  const matches = (t) =>
-    t.active &&
-    (t.product_id == null || t.product_id === product_id) &&
-    (t.ref_year == null || t.ref_year === ref_year) &&
-    (t.historical_status == null || t.historical_status === historical_status);
-  const score = (t) => (t.product_id != null) + (t.ref_year != null) + (t.historical_status != null);
-  const eligible = templates.filter(matches);
+/** Nome da etapa: 1 = mensagem inicial, 2 = follow-up 1, 3 = follow-up 2... */
+export function stageLabel(step) {
+  return step <= 1 ? 'Mensagem inicial (1ª abordagem)' : `Follow-up ${step - 1} (${step}ª abordagem)`;
+}
+export function stageShort(step) {
+  return step <= 1 ? 'Mensagem inicial' : `Follow-up ${step - 1}`;
+}
+
+/** O modelo vale para este contato (produto, ano, status histórico e situação atual de cliente)? */
+export function templateMatches(t, ctx) {
+  return t.active &&
+    (t.product_id == null || t.product_id === ctx.product_id) &&
+    (t.ref_year == null || t.ref_year === ctx.ref_year) &&
+    (t.historical_status == null || t.historical_status === ctx.historical_status) &&
+    (t.client_status == null || t.client_status === ctx.client_status);
+}
+
+/**
+ * Escolhe o modelo da etapa real do contato: o inicial na 1ª abordagem e, nos follow-ups,
+ * o modelo daquela etapa (ou o de etapa anterior mais próxima). Dentro da etapa, vence o
+ * segmento mais específico. Clientes ativos nunca recebem modelo automático.
+ */
+export function pickTemplate(templates, ctx) {
+  if (ctx.client_status === 'ativo') return null;
+  const step = ctx.step;
+  const score = (t) => (t.product_id != null) + (t.ref_year != null) + (t.historical_status != null) + (t.client_status != null);
+  const eligible = templates.filter((t) => templateMatches(t, ctx));
   const byKind = step <= 1
     ? eligible.filter((t) => t.kind === 'inicial')
     : eligible.filter((t) => t.kind === 'followup' && t.step <= step);
   if (!byKind.length) return null;
-  byKind.sort((a, b) => (b.step - a.step) * 10 + (score(b) - score(a)) || b.id - a.id);
-  // prioriza a etapa exata; dentro dela, o segmento mais específico
-  const best = byKind[0].step;
+  const best = Math.max(...byKind.map((t) => t.step));
   return byKind.filter((t) => t.step === best).sort((a, b) => score(b) - score(a) || b.id - a.id)[0];
 }

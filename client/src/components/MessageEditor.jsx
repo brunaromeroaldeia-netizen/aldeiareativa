@@ -21,8 +21,8 @@ export default function MessageEditor({ campaignId, readOnly, campaign }) {
   const refresh = () => qc.invalidateQueries({ queryKey: ['templates'] });
 
   const groups = [
-    { title: 'Primeira mensagem', items: templates.filter((t) => t.kind === 'inicial') },
-    ...[...new Set(templates.filter((t) => t.kind === 'followup').map((t) => t.step))].sort().map((s) => ({ title: `${s - 1}º follow-up (${s}ª abordagem)`, items: templates.filter((t) => t.kind === 'followup' && t.step === s) })),
+    { title: 'Mensagem inicial (1ª abordagem)', items: templates.filter((t) => t.kind === 'inicial') },
+    ...[...new Set(templates.filter((t) => t.kind === 'followup').map((t) => t.step))].sort().map((s) => ({ title: `Follow-up ${s - 1} (${s}ª abordagem)`, items: templates.filter((t) => t.kind === 'followup' && t.step === s) })),
   ];
 
   return (
@@ -50,6 +50,7 @@ export default function MessageEditor({ campaignId, readOnly, campaign }) {
                       <Badge className="bg-stone-50 text-ink/70 ring-line">{t.product_name || 'Todos os produtos'}</Badge>
                       <Badge className="bg-stone-50 text-ink/70 ring-line">{t.ref_year || 'Todos os anos'}</Badge>
                       <Badge className="bg-stone-50 text-ink/70 ring-line">{t.historical_status ? HIST[t.historical_status].label : 'Todos os status'}</Badge>
+                      {t.client_status === 'inativo' && <Badge className="bg-brand-100 text-brand-800 ring-brand-200">Só ex-clientes confirmados</Badge>}
                       <Badge className="bg-white text-muted ring-line">v{t.version}</Badge>
                     </div>
                   </div>
@@ -113,7 +114,7 @@ function TemplateModal({ template, campaignId, campaign, onClose, onSaved }) {
   };
   const save = async () => {
     setSaving(true);
-    const payload = { campaign_id: campaignId ?? null, name: f.name, kind: f.kind, step: Number(f.step), product_id: f.product_id ? Number(f.product_id) : null, ref_year: f.ref_year ? Number(f.ref_year) : null, historical_status: f.historical_status || null, body: f.body };
+    const payload = { campaign_id: campaignId ?? null, name: f.name, kind: f.kind, step: Number(f.step), product_id: f.product_id ? Number(f.product_id) : null, ref_year: f.ref_year ? Number(f.ref_year) : null, historical_status: f.historical_status || null, client_status: f.client_status || null, body: f.body };
     try {
       if (f.id) await api.patch(`/templates/${f.id}`, payload); else await api.post('/templates', payload);
       toast(f.id ? 'Mensagem atualizada (nova versão registrada)' : 'Mensagem criada');
@@ -131,7 +132,7 @@ function TemplateModal({ template, campaignId, campaign, onClose, onSaved }) {
             <Field label="Tipo">
               <Select value={f.kind === 'inicial' ? 1 : f.step} onChange={(e) => { const s = Number(e.target.value); setF({ ...f, kind: s === 1 ? 'inicial' : 'followup', step: s }); }}>
                 <option value={1}>Primeira mensagem</option>
-                {[2, 3, 4, 5, 6].map((s) => <option key={s} value={s}>{s - 1}º follow-up</option>)}
+                {[2, 3, 4, 5, 6].map((s) => <option key={s} value={s}>Follow-up {s - 1} ({s}ª abordagem)</option>)}
               </Select>
             </Field>
           </div>
@@ -140,6 +141,12 @@ function TemplateModal({ template, campaignId, campaign, onClose, onSaved }) {
             <Field label="Ano da base"><Select value={f.ref_year || ''} onChange={(e) => setF({ ...f, ref_year: e.target.value })}><option value="">Todos</option>{(campaign?.years?.length ? campaign.years : years).map((y) => <option key={y} value={y}>{y}</option>)}</Select></Field>
             <Field label="Status histórico"><Select value={f.historical_status || ''} onChange={(e) => setF({ ...f, historical_status: e.target.value })}><option value="">Todos</option>{Object.entries(HIST).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</Select></Field>
           </div>
+          <Field label="Situação atual do cliente" hint="“Só ex-clientes confirmados” nunca é sugerida para clientes ativos ou sem confirmação.">
+            <Select value={f.client_status || ''} onChange={(e) => setF({ ...f, client_status: e.target.value || null })}>
+              <option value="">Qualquer situação</option>
+              <option value="inativo">Só ex-clientes confirmados (não são mais clientes)</option>
+            </Select>
+          </Field>
           <Field label="Texto da mensagem" hint="Quebras de linha, emojis e *negrito*/_itálico_ do WhatsApp são preservados.">
             <Textarea ref={ta} rows={11} value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} placeholder="Oi, {{primeiro_nome}}! Tudo bem? 😊" />
           </Field>

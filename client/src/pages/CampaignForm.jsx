@@ -9,7 +9,8 @@ import { Card, CardHeader, PageHeader, Button, Field, Input, Textarea, Select, C
 
 const EMPTY = {
   name: '', description: '', promo_description: '', start_date: '', end_date: '', product_ids: [], years: [], historical_statuses: [],
-  filters: { lost_reasons: [], exclude_recent_days: 30, exclude_active_campaigns: true, exclude_converted: false, previous: 'todos' },
+  filters: { lost_reasons: [], exclude_recent_days: 30, exclude_active_campaigns: true, exclude_converted: false, exclude_active_clients: true, previous: 'todos' },
+  followup_schedule: {},
   goal_contacts: '', goal_conversions: '', goal_revenue: '', followup_days: 3, max_attempts: 3, seller_ids: [],
 };
 
@@ -109,6 +110,7 @@ export default function CampaignForm() {
               <div className="flex flex-col gap-2">
                 <Checkbox checked={f.filters.exclude_active_campaigns} onChange={(v) => upF('exclude_active_campaigns', v)} label="Excluir contatos que estão em outra campanha ativa" />
                 <Checkbox checked={f.filters.exclude_converted} onChange={(v) => upF('exclude_converted', v)} label="Excluir contatos já convertidos em campanhas anteriores" />
+                <Checkbox checked={f.filters.exclude_active_clients !== false} onChange={(v) => upF('exclude_active_clients', v)} label="Excluir clientes ativos (situação do cliente = ativo)" />
                 <p className="text-[12px] text-muted">Contatos com pedido de não contato (opt-out) são sempre excluídos.</p>
               </div>
             </div>
@@ -123,9 +125,25 @@ export default function CampaignForm() {
                 <Field label="Meta de conversões"><Input type="number" min={0} value={f.goal_conversions} onChange={(e) => up('goal_conversions', e.target.value)} /></Field>
                 <Field label="Meta de receita (R$)"><Input type="number" min={0} value={f.goal_revenue} onChange={(e) => up('goal_revenue', e.target.value)} /></Field>
               </div>
+              <div className="space-y-2">
+                <p className="text-[13px] font-medium">Intervalo de cada follow-up (dias corridos após o envio anterior)</p>
+                {Array.from({ length: Math.max(0, (Number(f.max_attempts) || 1) - 1) }, (_, i) => i + 2).map((step) => {
+                  const rule = schedule(f).steps.find((x) => x.step === step) || { step, min: Number(f.followup_days) || 3, max: Number(f.followup_days) || 3 };
+                  const setRule = (patch) => up('followup_schedule', { ...schedule(f), steps: [...schedule(f).steps.filter((x) => x.step !== step), { ...rule, ...patch }].sort((a, b) => a.step - b.step) });
+                  return (
+                    <div key={step} className="flex flex-wrap items-center gap-2 text-sm">
+                      <span className="w-48">Follow-up {step - 1} ({step}ª abordagem)</span>
+                      <span className="text-muted">de</span><Input type="number" min={1} max={60} className="w-20" value={rule.min} onChange={(e) => setRule({ min: Number(e.target.value), max: Math.max(Number(e.target.value), rule.max) })} />
+                      <span className="text-muted">a</span><Input type="number" min={1} max={60} className="w-20" value={rule.max} onChange={(e) => setRule({ max: Math.max(rule.min, Number(e.target.value)) })} />
+                      <span className="text-muted">dias</span>
+                    </div>
+                  );
+                })}
+                <p className="text-[12px] text-muted">Nenhum follow-up é agendado depois da data de encerramento da campanha.</p>
+              </div>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Dias até o follow-up" hint="Após cada envio sem resposta."><Input type="number" min={1} max={60} value={f.followup_days} onChange={(e) => up('followup_days', Number(e.target.value))} /></Field>
-                <Field label="Limite de abordagens" hint="Inclui a primeira mensagem."><Input type="number" min={1} max={10} value={f.max_attempts} onChange={(e) => up('max_attempts', Number(e.target.value))} /></Field>
+                <Field label="Limite de abordagens" hint="Inclui a mensagem inicial. Ex.: 3 = inicial + 2 follow-ups."><Input type="number" min={1} max={6} value={f.max_attempts} onChange={(e) => up('max_attempts', Number(e.target.value))} /></Field>
+                <Field label="Encerrar sem resposta após (dias)" hint="Contados da última abordagem."><Input type="number" min={1} max={60} value={schedule(f).close_after_days} onChange={(e) => up('followup_schedule', { ...schedule(f), close_after_days: Number(e.target.value) })} /></Field>
               </div>
             </div>
           </Card>
@@ -165,12 +183,18 @@ export default function CampaignForm() {
   );
 }
 
+function schedule(f) {
+  const s = f.followup_schedule || {};
+  return { steps: s.steps || [], close_after_days: s.close_after_days ?? (Number(f.followup_days) || 3) };
+}
+
 function payload(f) {
   const n = (v) => (v === '' || v === null || v === undefined ? null : Number(v));
   return {
     name: f.name || 'prévia', description: f.description || null, promo_description: f.promo_description || null,
     start_date: f.start_date || null, end_date: f.end_date || null, product_ids: f.product_ids, years: f.years, historical_statuses: f.historical_statuses,
     filters: f.filters, goal_contacts: n(f.goal_contacts), goal_conversions: n(f.goal_conversions), goal_revenue: n(f.goal_revenue),
-    followup_days: Number(f.followup_days) || 3, max_attempts: Number(f.max_attempts) || 3, seller_ids: f.seller_ids,
+    followup_days: schedule(f).steps.find((x) => x.step === 2)?.min || Number(f.followup_days) || 3, max_attempts: Number(f.max_attempts) || 3, seller_ids: f.seller_ids,
+    followup_schedule: { steps: schedule(f).steps.filter((x) => x.step <= (Number(f.max_attempts) || 3)), close_after_days: schedule(f).close_after_days },
   };
 }

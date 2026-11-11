@@ -144,7 +144,8 @@ export function mapRow(row, sheet, products) {
   const phoneNorm = normalizePhone(phoneRaw);
   const emailRaw = cleanText(get('email'));
   const emailNorm = normalizeEmail(emailRaw);
-  if (!fullName && company) { fullName = company; issues.push({ level: 'aviso', msg: 'Sem nome do contato — usado o nome da empresa' }); }
+  let nameFromCompany = false;
+  if (!fullName && company) { fullName = company; nameFromCompany = true; issues.push({ level: 'aviso', msg: 'Sem nome do contato: usado o nome da empresa (a saudação ficará sem primeiro nome)' }); }
   if (!fullName && !phoneNorm && !emailNorm) issues.push({ level: 'erro', msg: 'Linha sem nome, telefone ou e-mail' });
   if (!phoneNorm) issues.push({ level: 'aviso', msg: phoneRaw ? `Telefone inválido (${phoneRaw})` : 'Sem telefone' });
   if (emailRaw && !emailNorm) issues.push({ level: 'aviso', msg: `E-mail inválido (${emailRaw})` });
@@ -201,7 +202,7 @@ export function mapRow(row, sheet, products) {
   sheet.headers.forEach((h, i) => { if (!mappedIdx.has(i) && row[i] !== null && row[i] !== '') extra[h] = row[i]; });
 
   return {
-    full_name: fullName, first_name: firstNameOf(fullName), company,
+    full_name: fullName, first_name: nameFromCompany ? null : firstNameOf(fullName), company,
     phone: phoneNorm ? formatPhone(phoneNorm) : phoneRaw, phone_norm: phoneNorm,
     email: emailNorm || emailRaw, email_norm: emailNorm,
     product_raw: productRaw, product_id: productId,

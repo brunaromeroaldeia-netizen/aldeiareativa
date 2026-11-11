@@ -58,7 +58,8 @@ export async function groupedMetrics(q, groupExpr = `'total'`, { extraJoin = '' 
     ${extraJoin}
     LEFT JOIN LATERAL (SELECT count(*) AS messages, count(*) FILTER (WHERE i.attempt > 1) AS followups_done
         FROM interactions i WHERE i.campaign_contact_id = cc.id AND i.type = 'envio' AND ${msgRange}) m ON TRUE
-    LEFT JOIN LATERAL (SELECT count(*) FILTER (WHERE f.due_date < '${t}') AS overdue, count(*) FILTER (WHERE f.due_date = '${t}') AS today
+    LEFT JOIN LATERAL (SELECT count(*) FILTER (WHERE COALESCE(f.due_until, f.due_date) < '${t}') AS overdue,
+        count(*) FILTER (WHERE f.due_date <= '${t}' AND COALESCE(f.due_until, f.due_date) >= '${t}') AS today
         FROM followups f WHERE f.campaign_contact_id = cc.id AND f.status = 'pendente') fu ON TRUE
     WHERE ${f.where}
     GROUP BY 1 ORDER BY 1`, f.params);

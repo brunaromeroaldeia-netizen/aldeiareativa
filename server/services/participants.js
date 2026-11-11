@@ -42,8 +42,8 @@ export function participantWhere(req, q = req.query, { forceOwn = true } = {}) {
   const pendingFu = `EXISTS (SELECT 1 FROM followups f WHERE f.campaign_contact_id=cc.id AND f.status='pendente'`;
   switch (q.queue) {
     case 'para_enviar': where.push(`cc.status='pendente' AND c.status='ativa'`); break;
-    case 'followups_hoje': where.push(`${pendingFu} AND f.due_date = '${t}') AND c.status='ativa'`); break;
-    case 'atrasados': where.push(`${pendingFu} AND f.due_date < '${t}') AND c.status='ativa'`); break;
+    case 'followups_hoje': where.push(`${pendingFu} AND f.due_date <= '${t}' AND COALESCE(f.due_until, f.due_date) >= '${t}') AND c.status='ativa'`); break;
+    case 'atrasados': where.push(`${pendingFu} AND COALESCE(f.due_until, f.due_date) < '${t}') AND c.status='ativa'`); break;
     case 'aguardando': where.push(`cc.status IN ('enviada','aguardando') AND NOT ${pendingFu} AND f.due_date <= '${t}')`); break;
     case 'negociacao': where.push(`cc.status IN ('respondeu','interesse','negociacao')`); break;
     case 'retornos': where.push(`cc.status='retorno_futuro'`); break;
@@ -63,7 +63,7 @@ export function participantWhere(req, q = req.query, { forceOwn = true } = {}) {
     case 'sem_resposta': where.push(`${cohort} AND cc.status = 'sem_resposta'`); break;
     case 'aguardando_resposta': where.push(`${cohort} AND cc.status IN ('enviada','aguardando','followup_pendente')`); break;
     case 'opt_out': where.push(`cc.status = 'opt_out'`); break;
-    case 'followups_atrasados': where.push(`${pendingFu} AND f.due_date < '${t}') AND c.status='ativa'`); break;
+    case 'followups_atrasados': where.push(`${pendingFu} AND COALESCE(f.due_until, f.due_date) < '${t}') AND c.status='ativa'`); break;
     case 'followups_pendentes': where.push(`${pendingFu}) AND c.status='ativa'`); break;
     default: break;
   }
@@ -90,23 +90,27 @@ export const PARTICIPANT_COLUMNS = `
   ct.id AS contact_id, ct.full_name, ct.first_name, ct.company, ct.phone, ct.email, ct.do_not_contact,
   o.id AS opportunity_id, o.ref_year, o.historical_status, o.lost_reason, p.id AS product_id, p.name AS product_name,
   (SELECT min(f.due_date) FROM followups f WHERE f.campaign_contact_id = cc.id AND f.status = 'pendente') AS next_due,
-  (SELECT f.type FROM followups f WHERE f.campaign_contact_id = cc.id AND f.status = 'pendente' ORDER BY f.due_date LIMIT 1) AS next_due_type`;
+  (SELECT f.type FROM followups f WHERE f.campaign_contact_id = cc.id AND f.status = 'pendente' ORDER BY f.due_date LIMIT 1) AS next_due_type,
+  (SELECT COALESCE(f.due_until, f.due_date) FROM followups f WHERE f.campaign_contact_id = cc.id AND f.status = 'pendente' ORDER BY f.due_date LIMIT 1) AS next_due_until`;
 
 export function nextAction(p, t = today()) {
   if (p.campaign_status === 'encerrada') return { label: 'Campanha encerrada', tone: 'muted' };
   if (p.campaign_status === 'pausada') return { label: 'Campanha pausada', tone: 'muted' };
   const due = p.next_due;
-  if (p.status === 'pendente') return { label: 'Enviar 1ª mensagem', tone: 'primary' };
+  const until = p.next_due_until || due;
+  const stage = p.attempts + 1 <= 1 ? 'Mensagem inicial' : `Follow-up ${p.attempts}`;
+  if (p.status === 'pendente') return { label: 'Enviar mensagem inicial', tone: 'primary' };
   if (due && due <= t) {
-    const late = due < t;
+    const late = until < t;
     if (p.next_due_type === 'retorno') return { label: late ? 'Retorno atrasado' : 'Retornar hoje', tone: late ? 'danger' : 'warning' };
-    return { label: `${late ? 'Follow-up atrasado' : 'Follow-up hoje'} (${p.attempts + 1}ª)`, tone: late ? 'danger' : 'warning' };
+    if (late) return { label: `${stage} atrasado`, tone: 'danger' };
+    return { label: until > t ? `${stage} até ${fmt(until)}` : `${stage} hoje`, tone: 'warning' };
   }
   switch (p.status) {
     case 'enviada': case 'aguardando':
-      return due ? { label: `Aguardar · follow-up ${fmt(due)}`, tone: 'muted' }
-        : { label: p.no_response_deadline ? `Aguardar até ${fmt(p.no_response_deadline)}` : 'Aguardar resposta', tone: 'muted' };
-    case 'followup_pendente': return { label: `Enviar follow-up (${p.attempts + 1}ª)`, tone: 'warning' };
+      return due ? { label: `Aguardar · ${stage} ${until !== due ? `${fmt(due)}–${fmt(until)}` : fmt(due)}`, tone: 'muted' }
+        : { label: p.no_response_deadline ? `Aguardar até ${fmt(p.no_response_deadline)} · sem novas tentativas` : 'Aguardar resposta', tone: 'muted' };
+    case 'followup_pendente': return { label: `Enviar ${stage}`, tone: 'warning' };
     case 'respondeu': return { label: 'Qualificar resposta', tone: 'primary' };
     case 'interesse': return { label: 'Negociar', tone: 'primary' };
     case 'negociacao': return { label: 'Fechar negociação', tone: 'primary' };
@@ -123,8 +127,8 @@ export async function queueCounts(req, baseQuery) {
   const t = today();
   return one(`SELECT
       count(*) FILTER (WHERE cc.status='pendente' AND c.status='ativa')::int AS para_enviar,
-      count(*) FILTER (WHERE c.status='ativa' AND EXISTS (SELECT 1 FROM followups f WHERE f.campaign_contact_id=cc.id AND f.status='pendente' AND f.due_date = '${t}'))::int AS followups_hoje,
-      count(*) FILTER (WHERE c.status='ativa' AND EXISTS (SELECT 1 FROM followups f WHERE f.campaign_contact_id=cc.id AND f.status='pendente' AND f.due_date < '${t}'))::int AS atrasados,
+      count(*) FILTER (WHERE c.status='ativa' AND EXISTS (SELECT 1 FROM followups f WHERE f.campaign_contact_id=cc.id AND f.status='pendente' AND f.due_date <= '${t}' AND COALESCE(f.due_until, f.due_date) >= '${t}'))::int AS followups_hoje,
+      count(*) FILTER (WHERE c.status='ativa' AND EXISTS (SELECT 1 FROM followups f WHERE f.campaign_contact_id=cc.id AND f.status='pendente' AND COALESCE(f.due_until, f.due_date) < '${t}'))::int AS atrasados,
       count(*) FILTER (WHERE cc.status IN ('enviada','aguardando') AND NOT EXISTS (SELECT 1 FROM followups f WHERE f.campaign_contact_id=cc.id AND f.status='pendente' AND f.due_date <= '${t}'))::int AS aguardando,
       count(*) FILTER (WHERE cc.status IN ('respondeu','interesse','negociacao'))::int AS negociacao,
       count(*) FILTER (WHERE cc.status='retorno_futuro')::int AS retornos,

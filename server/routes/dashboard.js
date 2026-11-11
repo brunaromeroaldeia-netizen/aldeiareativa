@@ -19,8 +19,8 @@ r.get('/overview', ah(async (req, res) => {
   const { where, params } = participantWhere(req, { ...productQ });
   const agenda = await one(`SELECT
       count(*) FILTER (WHERE cc.status='pendente' AND c.status='ativa')::int AS para_enviar,
-      count(*) FILTER (WHERE c.status='ativa' AND EXISTS (SELECT 1 FROM followups f WHERE f.campaign_contact_id=cc.id AND f.status='pendente' AND f.due_date='${t}'))::int AS followups_hoje,
-      count(*) FILTER (WHERE c.status='ativa' AND EXISTS (SELECT 1 FROM followups f WHERE f.campaign_contact_id=cc.id AND f.status='pendente' AND f.due_date<'${t}'))::int AS atrasados,
+      count(*) FILTER (WHERE c.status='ativa' AND EXISTS (SELECT 1 FROM followups f WHERE f.campaign_contact_id=cc.id AND f.status='pendente' AND f.due_date<='${t}' AND COALESCE(f.due_until, f.due_date)>='${t}'))::int AS followups_hoje,
+      count(*) FILTER (WHERE c.status='ativa' AND EXISTS (SELECT 1 FROM followups f WHERE f.campaign_contact_id=cc.id AND f.status='pendente' AND COALESCE(f.due_until, f.due_date)<'${t}'))::int AS atrasados,
       count(*) FILTER (WHERE cc.status IN ('respondeu','interesse','negociacao'))::int AS negociacao
     ${PARTICIPANT_FROM} WHERE ${where}`, params);
   const productFilter = intList(req.query.product_id);
@@ -56,7 +56,7 @@ r.get('/agenda', ah(async (req, res) => {
   const q = { ...req.query };
   delete q.queue;
   const { where, params } = participantWhere(req, q);
-  const rows = await many(`SELECT f.id AS followup_id, f.due_date, f.type AS followup_type, f.step, ${PARTICIPANT_COLUMNS}
+  const rows = await many(`SELECT f.id AS followup_id, f.due_date, f.due_until, f.type AS followup_type, f.step, ${PARTICIPANT_COLUMNS}
     ${PARTICIPANT_FROM} JOIN followups f ON f.campaign_contact_id = cc.id AND f.status = 'pendente'
     WHERE ${where} AND c.status = 'ativa' AND f.due_date <= '${addDays(t, days)}'
     ORDER BY f.due_date, ct.full_name LIMIT 500`, params);

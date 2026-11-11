@@ -5,6 +5,8 @@ import { setDatabase } from './shims/pg.js';
 import { files } from './shims/fs.js';
 import migrationSql from '../server/migrations/001_init.sql?raw';
 import migration002 from '../server/migrations/002_atualizacao_oportunidades.sql?raw';
+import migration003 from '../server/migrations/003_sequencia_e_situacao_cliente.sql?raw';
+import { runBlackFridayUpdate } from '../server/services/blackFriday.js';
 import { Router } from './shims/express.js';
 import { loadUser, requireAuth, requireAdmin, hashPassword, COOKIE } from '../server/auth.js';
 import { HttpError, ah } from '../server/lib/http.js';
@@ -45,6 +47,7 @@ async function seed(progress) {
   const sql = migrationSql.replace(/CREATE EXTENSION[^;]*;/, '').replace(/CREATE INDEX contacts_name_trgm[^;]*;/, '');
   await db.exec(sql);
   await db.exec(migration002);
+  await db.exec(migration003);
   progress?.('Criando usuárias de teste…');
   for (const u of TEST_USERS) {
     await query('INSERT INTO users(name, email, role, password_hash, must_change_password) VALUES ($1,$2,$3,$4,FALSE)', [u.name, u.email, u.role, await hashPassword(u.password)]);
@@ -76,8 +79,26 @@ export async function boot(progress) {
   await db.exec(`SET TIME ZONE 'America/Sao_Paulo'`);
   const exists = await db.query(`SELECT to_regclass('public.users') AS t`);
   if (!exists.rows[0].t) await seed(progress);
-  else await db.exec(migration002); // atualiza ambientes de teste já existentes (idempotente)
+  else {
+    // atualiza ambientes de teste já existentes, preservando tudo o que foi feito (idempotente)
+    progress?.('Aplicando atualizações…');
+    await db.exec(migration002);
+    await db.exec(migration003);
+  }
+  try {
+    const bf = await runBlackFridayUpdate();
+    if (bf) console.info('[teste] pacote Black Friday aplicado', bf);
+  } catch (e) {
+    console.error('[teste] atualização da Black Friday não aplicada', e); // nunca impede a abertura do sistema
+  }
+  await persist(); // garante que a carga inicial e as atualizações ficaram gravadas
   return { persistent };
+}
+
+/** Grava no armazenamento do navegador e só retorna quando a gravação terminou. */
+async function persist() {
+  if (!persistent) return;
+  try { await db.fs.syncToFs(false); } catch { await db.syncToFs(); }
 }
 
 export async function resetEnvironment(progress) {
@@ -85,6 +106,7 @@ export async function resetEnvironment(progress) {
   files.clear();
   writeCookies({});
   await seed(progress);
+  await persist();
 }
 
 // ---------------- sessão (cookie simulado) ----------------
@@ -190,10 +212,13 @@ async function doHandle(method, rawUrl, headers, body) {
     query: Object.fromEntries(u.searchParams), params: {}, headers, body: parsedBody, file, ip: 'navegador (teste)',
     cookies: readCookies(), get: (n) => headers[n.toLowerCase()],
   };
-  return new Promise((resolve) => {
+  const response = await new Promise((resolve) => {
     const res = makeRes(resolve);
     api.handle(req, res, (err) => { if (!res.finished) sendError(res, err || new HttpError(404, 'Rota não encontrada.')); });
   });
+  // toda ação que altera dados só termina depois de gravada no navegador (fechar a página logo em seguida não perde nada)
+  if (method !== 'GET') await persist();
+  return response;
 }
 
 // requisições executadas uma de cada vez (o banco do navegador tem uma única conexão)

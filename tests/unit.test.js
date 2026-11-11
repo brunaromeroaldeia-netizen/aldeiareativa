@@ -98,3 +98,9 @@ test('distribuição 50/50 e proporcional', () => {
   const p = distribute(parts.slice(0, 100), { 10: 70, 20: 30 });
   assert.equal(p.filter((x) => x.user_id === 10).length, 70);
 });
+
+test('primeiro nome nunca vem do nome da empresa', () => {
+  const s = { headers: ['Nome', 'Empresa', 'Telefone'], mapping: autoMap(['Nome', 'Empresa', 'Telefone']) };
+  assert.equal(mapRow([null, 'Ferreira Design', '41999990000'], s, []).first_name, null);
+  assert.equal(mapRow(['MARIANA FERREIRA', 'Ferreira Design', '41999990000'], s, []).first_name, 'Mariana');
+});

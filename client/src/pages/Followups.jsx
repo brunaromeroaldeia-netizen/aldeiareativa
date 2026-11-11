@@ -19,8 +19,9 @@ export default function Followups() {
   const { data, isLoading } = useQuery({ queryKey: ['agenda', f, productId], queryFn: () => api.get(`/dashboard/agenda${qs({ ...f, product_id: productId })}`) });
   const today = data?.today;
   const rows = data?.rows || [];
-  const overdue = rows.filter((r) => r.due_date < today);
-  const byDay = rows.filter((r) => r.due_date >= today).reduce((a, r) => { (a[r.due_date] ||= []).push(r); return a; }, {});
+  const until = (r) => r.due_until || r.due_date;
+  const overdue = rows.filter((r) => until(r) < today);
+  const byDay = rows.filter((r) => until(r) >= today).map((r) => ({ ...r, due_date: r.due_date < today ? today : r.due_date })).reduce((a, r) => { (a[r.due_date] ||= []).push(r); return a; }, {});
   const ids = rows.map((r) => r.id);
   const idx = ids.indexOf(openId);
 
@@ -36,9 +37,9 @@ export default function Followups() {
             <span className="font-medium min-w-40">{r.full_name}</span>
             <span className="text-muted tabular">{r.phone}</span>
             <span className="text-[12.5px] text-muted">{r.product_name?.split(' /')[0]} · {r.ref_year} · {HIST[r.historical_status]?.label}</span>
-            <span className="text-[12.5px]">{r.followup_type === 'retorno' ? 'Retorno combinado' : `Follow-up (${r.attempts + 1}ª abordagem)`}</span>
+            <span className="text-[12.5px]">{r.followup_type === 'retorno' ? 'Retorno combinado' : `Follow-up ${r.step - 1} (${r.step}ª abordagem)`}{r.due_until && r.due_until !== r.due_date ? ` · até ${fmtDate(r.due_until)}` : ''}</span>
             <StatusBadge status={r.status} />
-            {tone === 'danger' && <span className="text-[12px] text-rose-600 font-medium">venceu {fmtDate(r.due_date)} ({relDays(r.due_date, today)})</span>}
+            {tone === 'danger' && <span className="text-[12px] text-rose-600 font-medium">prazo até {fmtDate(until(r))} ({relDays(until(r), today)})</span>}
             {isAdmin && <span className="text-[12px] text-muted ml-auto">{r.assigned_name || 'sem responsável'}</span>}
             <span className="text-[12px] text-muted hidden lg:inline">{r.campaign_name}</span>
           </li>

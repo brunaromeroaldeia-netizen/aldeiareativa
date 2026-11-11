@@ -10,6 +10,7 @@ import { useAuth } from '../lib/context.jsx';
 import { fmtDate, fmtDateTime, fmtMoney, relDays, addDaysIso, STATUS } from '../lib/format.js';
 import {
   Button, Badge, StatusBadge, HistBadge, CampaignBadge, Alert, Textarea, Input, Field, Select, Loading, cx, useToast, useConfirm, DemoTag,
+  Checkbox,
 } from './ui.jsx';
 
 const EVENT_LABEL = {
@@ -33,8 +34,12 @@ export default function ParticipantPanel({ id, onClose, onPrev, onNext, position
   const [action, setAction] = useState(null);
   const [notes, setNotes] = useState('');
   const [newNote, setNewNote] = useState('');
+  const [allowMismatch, setAllowMismatch] = useState(false);
+  const [allowEarly, setAllowEarly] = useState(false);
+  const { data: users = [] } = useQuery({ queryKey: ['users'], queryFn: () => api.get('/users'), staleTime: 300000 });
 
-  useEffect(() => { setTemplateId(null); setCopied(false); setEditing(false); setAction(null); setNewNote(''); }, [id]);
+  useEffect(() => { setTemplateId(null); setCopied(false); setEditing(false); setAction(null); setNewNote(''); setAllowMismatch(false); setAllowEarly(false); }, [id]);
+  useEffect(() => { setAllowMismatch(false); setCopied(false); }, [templateId]);
   useEffect(() => { if (data) { setText(data.message.text); setNotes(data.participant.notes || ''); } }, [data]);
 
   const invalidate = () => {
@@ -46,10 +51,11 @@ export default function ParticipantPanel({ id, onClose, onPrev, onNext, position
     mutationFn: () => api.post(`/participants/${id}/send`, {
       message_text: text, template_id: data.message.template?.id ?? null, template_version: data.message.template?.version ?? null,
       expected_attempts: data.participant.attempts, note: editing && text !== data.message.text ? 'Mensagem editada antes do envio' : undefined,
+      allow_stage_mismatch: allowMismatch || undefined, allow_early: allowEarly || undefined,
     }),
     onSuccess: (r) => {
-      toast(r.nextDue ? `Envio registrado. Follow-up agendado para ${fmtDate(r.nextDue)}.` : 'Envio registrado. Limite de tentativas atingido.');
-      setCopied(false); setEditing(false); invalidate();
+      toast(r.nextDue ? `Envio registrado. ${r.nextStage} previsto ${r.nextUntil && r.nextUntil !== r.nextDue ? `entre ${fmtDate(r.nextDue)} e ${fmtDate(r.nextUntil)}` : `para ${fmtDate(r.nextDue)}`}.` : `Envio registrado. ${r.note || ''}`);
+      setCopied(false); setEditing(false); setAllowMismatch(false); setAllowEarly(false); setTemplateId(null); invalidate();
     },
     onError: (e) => toast(e.message, 'error'),
   });
@@ -68,8 +74,20 @@ export default function ParticipantPanel({ id, onClose, onPrev, onNext, position
   const canSend = canAct && !closed && !contact.do_not_contact && ['pendente', 'enviada', 'aguardando', 'followup_pendente', 'retorno_futuro'].includes(p.status);
   const pendingFu = followups.find((f) => f.status === 'pendente');
   const sentToday = p.last_sent_at && new Date(p.last_sent_at).toDateString() === new Date().toDateString();
+  const early = !!(pendingFu && pendingFu.type === 'followup' && pendingFu.due_date > data.today);
+  const recentSend = !!(p.last_sent_at && Date.now() - new Date(p.last_sent_at).getTime() < 20 * 3600 * 1000);
+  const limitReached = p.attempts >= p.max_attempts && p.status !== 'retorno_futuro';
+  const sellers = users.filter((u) => u.role === 'vendedora' && u.active);
+  const sendBlocked = message.needs_seller || limitReached || (message.stage_mismatch && !allowMismatch) || ((early || recentSend) && !allowEarly);
+  const assign = async (userId) => {
+    try { await api.post(`/participants/${id}/assign`, { user_id: Number(userId) }); toast('Contato atribuído'); invalidate(); } catch (e) { toast(e.message, 'error'); }
+  };
+  const setClientStatus = async (v) => {
+    try { await api.post(`/contacts/${contact.id}/client-status`, { status: v || null }); toast('Situação do cliente atualizada'); setTemplateId(null); invalidate(); } catch (e) { toast(e.message, 'error'); }
+  };
 
   const doCopy = async () => {
+    if (message.needs_seller) return toast('Atribua o contato a uma vendedora antes de copiar a mensagem.', 'error');
     if (!text.trim()) return toast('Não há mensagem para copiar.', 'error');
     const ok = await copyText(text);
     if (!ok) return toast('Não foi possível copiar. Selecione o texto manualmente.', 'error');
@@ -111,36 +129,79 @@ export default function ParticipantPanel({ id, onClose, onPrev, onNext, position
           <Info icon={Building2} label="Empresa">{contact.company || '—'}</Info>
           <Info label="Produto · ano">{opportunity ? `${opportunity.product_name || 'Sem produto'} · ${opportunity.ref_year || 's/ ano'}` : '—'}{opportunity?.year_inferred && <span className="text-[11px] text-amber-700 ml-1">(ano inferido)</span>}</Info>
           <Info label="Status histórico"><HistBadge status={opportunity?.historical_status} /></Info>
+          <div className="min-w-0">
+            <p className="text-[11.5px] text-muted">Situação do cliente</p>
+            {canAct ? (
+              <Select className="!h-8 text-[13px] mt-0.5" value={contact.client_status || ''} onChange={(e) => setClientStatus(e.target.value)}>
+                <option value="">Não confirmada</option>
+                <option value="inativo">Ex-cliente (não é mais cliente)</option>
+                <option value="ativo">Cliente ativo</option>
+              </Select>
+            ) : <p>{contact.client_status === 'ativo' ? 'Cliente ativo' : contact.client_status === 'inativo' ? 'Ex-cliente' : 'Não confirmada'}</p>}
+          </div>
           <Info label="Motivo da perda">{opportunity?.lost_reason || '—'}</Info>
           {opportunity?.original_owner && <Info label="Responsável original">{opportunity.original_owner}</Info>}
           {opportunity?.value ? <Info label="Valor original">{fmtMoney(opportunity.value)}</Info> : null}
           {isAdmin && <Info label="Responsável atual">{data.seller?.name || 'Sem responsável'}</Info>}
         </div>
 
+        {/* condições da campanha */}
+        {p.promo_description && (
+          <details className="rounded-xl ring-1 ring-line px-4 py-2.5 text-sm">
+            <summary className="cursor-pointer font-semibold text-[13px]">Condições comerciais da campanha</summary>
+            <p className="whitespace-pre-line text-[13px] text-ink/85 mt-2 leading-relaxed">{p.promo_description}</p>
+          </details>
+        )}
+
         {/* mensagem */}
         <section className="rounded-xl ring-1 ring-line bg-stone-50/70">
-          <div className="flex items-center justify-between gap-2 px-4 pt-3">
-            <p className="text-[13px] font-semibold flex items-center gap-1.5"><MessageSquareText className="size-4 text-brand-600" />
-              {message.step === 1 ? 'Mensagem de abordagem' : `Mensagem de follow-up (${message.step}ª abordagem)`}</p>
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-3">
+            <div className="min-w-0">
+              <p className="text-[13px] font-semibold flex items-center gap-1.5"><MessageSquareText className="size-4 text-brand-600" />{message.stage_label}</p>
+              {message.template && <p className="text-[12px] text-muted mt-0.5">Modelo: {message.template.name} · {message.template.stage}{message.template.auto ? ' (sugerido para este contato)' : ' (escolhido manualmente)'}</p>}
+            </div>
             {message.options.length > 1 && (
-              <Select className="!h-8 !w-auto max-w-[55%] text-[13px]" value={message.template?.id || ''} onChange={(e) => setTemplateId(Number(e.target.value) || null)}>
-                {message.options.map((o) => <option key={o.id} value={o.id}>{o.kind === 'inicial' ? 'Inicial' : `Follow-up ${o.step - 1}`} — {o.name}</option>)}
+              <Select className="!h-8 !w-auto max-w-[60%] text-[13px]" value={message.template?.id || ''} onChange={(e) => setTemplateId(Number(e.target.value) || null)} aria-label="Trocar modelo">
+                {!message.template && <option value="">Escolher modelo…</option>}
+                {message.options.map((o) => <option key={o.id} value={o.id}>{o.name}{o.step !== message.step ? ` (${o.stage}: outra etapa)` : !o.suits ? ' (outro segmento)' : ''}</option>)}
               </Select>
             )}
           </div>
           {message.warnings.length > 0 && <div className="px-4 pt-2 space-y-1">{message.warnings.map((w, i) => <p key={i} className="text-[12px] text-amber-800">⚠ {w}</p>)}</div>}
+          {message.needs_seller && isAdmin && (
+            <div className="px-4 pt-2 flex flex-wrap items-center gap-2 text-[13px]">
+              <span>Atribuir a:</span>
+              <Select className="!h-8 !w-auto text-[13px]" value="" onChange={(e) => e.target.value && assign(e.target.value)}>
+                <option value="">Escolher vendedora…</option>
+                {sellers.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </Select>
+            </div>
+          )}
           <div className="p-4 pt-3">
             {editing ? (
               <Textarea rows={9} value={text} onChange={(e) => { setText(e.target.value); setCopied(false); }} className="font-[inherit] text-[14px]" />
             ) : (
-              <div className="wa-text rounded-lg bg-white ring-1 ring-line px-3.5 py-3 text-[14px] leading-relaxed min-h-24">{text || <span className="text-muted">Sem mensagem cadastrada para esta etapa.</span>}</div>
+              <div className="wa-text rounded-lg bg-white ring-1 ring-line px-3.5 py-3 text-[14px] leading-relaxed min-h-24">{text || <span className="text-muted">Sem mensagem para esta etapa.</span>}</div>
             )}
+            {canSend && message.stage_mismatch && (
+              <div className="mt-3 rounded-lg bg-amber-50 ring-1 ring-amber-200 px-3 py-2 text-[12.5px] text-amber-900">
+                <p>O modelo escolhido é de <b>{message.template?.stage}</b>, mas este contato está na etapa <b>{message.stage_label}</b>.</p>
+                <Checkbox className="mt-1.5 !text-[12.5px]" checked={allowMismatch} onChange={setAllowMismatch} label="Usar este modelo nesta etapa mesmo assim" />
+              </div>
+            )}
+            {canSend && !limitReached && (early || recentSend) && (
+              <div className="mt-3 rounded-lg bg-amber-50 ring-1 ring-amber-200 px-3 py-2 text-[12.5px] text-amber-900">
+                <p>{early ? <>O {message.stage_label.split(' (')[0]} está previsto {pendingFu.due_until && pendingFu.due_until !== pendingFu.due_date ? <>entre <b>{fmtDate(pendingFu.due_date)}</b> e <b>{fmtDate(pendingFu.due_until)}</b></> : <>para <b>{fmtDate(pendingFu.due_date)}</b></>}. Enviar antes pode ser insistente.</> : <>Já houve envio para este contato nas últimas horas ({fmtDateTime(p.last_sent_at)}).</>}</p>
+                <Checkbox className="mt-1.5 !text-[12.5px]" checked={allowEarly} onChange={setAllowEarly} label="Enviar agora mesmo assim" />
+              </div>
+            )}
+            {canSend && limitReached && <p className="mt-3 text-[12.5px] text-muted">Limite de {p.max_attempts} abordagens atingido nesta campanha. Não há novas tentativas por ausência de resposta.</p>}
             <div className="flex flex-wrap items-center gap-2 mt-3">
-              <Button variant={copied ? 'secondary' : 'dark'} size="lg" icon={copied ? CheckCheck : Copy} onClick={doCopy} disabled={!text.trim() || contact.do_not_contact} className="flex-1 sm:flex-none">
+              <Button variant={copied ? 'secondary' : 'dark'} size="lg" icon={copied ? CheckCheck : Copy} onClick={doCopy} disabled={!text.trim() || contact.do_not_contact || message.needs_seller} className="flex-1 sm:flex-none">
                 {copied ? 'Copiada' : 'Copiar mensagem'}
               </Button>
               {canSend && (
-                <Button variant="primary" size="lg" icon={Send} onClick={doSend} loading={send.isPending} className="flex-1 sm:flex-none">Confirmar envio</Button>
+                <Button variant="primary" size="lg" icon={Send} onClick={doSend} loading={send.isPending} disabled={sendBlocked} className="flex-1 sm:flex-none">Confirmar envio</Button>
               )}
               <div className="flex gap-1 ml-auto">
                 {editing ? <Button size="sm" variant="ghost" icon={RotateCcw} onClick={() => { setText(message.text); setEditing(false); }}>Restaurar</Button>
@@ -148,7 +209,7 @@ export default function ParticipantPanel({ id, onClose, onPrev, onNext, position
               </div>
             </div>
             <p className="text-[12px] text-muted mt-2">Copiar não registra envio. Depois de enviar pelo CowPilot, clique em <b>Confirmar envio</b>.</p>
-            {sentToday && canSend && <p className="text-[12px] text-amber-700 mt-1">Já houve envio hoje para este contato ({fmtDateTime(p.last_sent_at)}).</p>}
+            {sentToday && canSend && !recentSend && <p className="text-[12px] text-amber-700 mt-1">Já houve envio hoje para este contato ({fmtDateTime(p.last_sent_at)}).</p>}
           </div>
         </section>
 
@@ -341,8 +402,9 @@ function FollowupBox({ p, pending, today, isAdmin, onDone }) {
         <div className="text-sm">
           <p className="font-semibold text-[13px]">Próximo follow-up</p>
           {pending ? (
-            <p className={cx('mt-0.5', pending.due_date < today ? 'text-rose-600 font-medium' : pending.due_date === today ? 'text-amber-700 font-medium' : 'text-ink')}>
-              {fmtDate(pending.due_date)} · {relDays(pending.due_date, today)} {pending.type === 'retorno' && '(retorno combinado)'}
+            <p className={cx('mt-0.5', (pending.due_until || pending.due_date) < today ? 'text-rose-600 font-medium' : pending.due_date <= today ? 'text-amber-700 font-medium' : 'text-ink')}>
+              {pending.type === 'followup' && pending.step ? `${pending.step <= 1 ? 'Mensagem inicial' : `Follow-up ${pending.step - 1}`}: ` : ''}
+              {pending.due_until && pending.due_until !== pending.due_date ? `entre ${fmtDate(pending.due_date)} e ${fmtDate(pending.due_until)}` : fmtDate(pending.due_date)} · {relDays(pending.due_date, today)} {pending.type === 'retorno' && '(retorno combinado)'}
             </p>
           ) : <p className="text-muted mt-0.5">{p.no_response_deadline ? `Sem novos follow-ups. Encerra sem resposta após ${fmtDate(p.no_response_deadline)}.` : 'Nenhum agendado.'}</p>}
         </div>
@@ -375,7 +437,7 @@ export function Timeline({ events, compact }) {
             e.type === 'envio' ? 'bg-sky-500' : e.type === 'conversao' ? 'bg-brand-600' : e.type === 'opt_out' ? 'bg-rose-500' : e.type === 'status' ? 'bg-violet-500' : 'bg-stone-300')} />
           <div className="text-[13px]">
             <p className="flex flex-wrap items-center gap-x-2">
-              <span className="font-medium">{EVENT_LABEL[e.type] || e.type}{e.type === 'envio' && e.attempt ? ` (${e.attempt}ª)` : ''}</span>
+              <span className="font-medium">{e.type === 'envio' && e.attempt ? (e.attempt === 1 ? 'Mensagem inicial enviada' : `Follow-up ${e.attempt - 1} enviado`) + ` (${e.attempt}ª abordagem)` : EVENT_LABEL[e.type] || e.type}</span>
               {e.to_status && e.type !== 'envio' && <StatusBadge status={e.to_status} />}
               <span className="text-muted text-[12px]">{fmtDateTime(e.created_at)}{e.user_name ? ` · ${e.user_name}` : ''}</span>
             </p>

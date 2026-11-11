@@ -23,6 +23,11 @@ const campaignSchema = z.object({
     exclude_active_campaigns: z.boolean().optional(),
     exclude_converted: z.boolean().optional(),
     previous: z.enum(['todos', 'nunca_abordados', 'ja_abordados']).optional(),
+    exclude_active_clients: z.boolean().optional(),
+  }).default({}),
+  followup_schedule: z.object({
+    steps: z.array(z.object({ step: z.number().int().min(2).max(10), min: z.number().int().min(1).max(60), max: z.number().int().min(1).max(60) })).optional(),
+    close_after_days: z.number().int().min(1).max(60).optional(),
   }).default({}),
   goal_contacts: z.number().int().min(0).nullable().optional(),
   goal_conversions: z.number().int().min(0).nullable().optional(),
@@ -96,10 +101,10 @@ r.post('/', requireAdmin, ah(async (req, res) => {
   if (d.start_date && d.end_date && d.end_date < d.start_date) throw bad('A data de encerramento deve ser posterior ao início.');
   const id = await tx(async (c) => {
     const row = (await c.query(`INSERT INTO campaigns(name, description, promo_description, start_date, end_date, product_ids, years, historical_statuses,
-        filters, goal_contacts, goal_conversions, goal_revenue, followup_days, max_attempts, created_by)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
+        filters, goal_contacts, goal_conversions, goal_revenue, followup_days, max_attempts, created_by, followup_schedule)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`,
       [d.name, d.description ?? null, d.promo_description ?? null, d.start_date ?? null, d.end_date ?? null, d.product_ids, d.years,
-        d.historical_statuses, d.filters, d.goal_contacts ?? null, d.goal_conversions ?? null, d.goal_revenue ?? null, d.followup_days, d.max_attempts, req.user.id])).rows[0];
+        d.historical_statuses, d.filters, d.goal_contacts ?? null, d.goal_conversions ?? null, d.goal_revenue ?? null, d.followup_days, d.max_attempts, req.user.id, d.followup_schedule])).rows[0];
     await saveSellers(c, row.id, d.seller_ids);
     return row.id;
   });
@@ -115,9 +120,10 @@ r.patch('/:id', requireAdmin, ah(async (req, res) => {
   if (d.start_date && d.end_date && d.end_date < d.start_date) throw bad('A data de encerramento deve ser posterior ao início.');
   await tx(async (c) => {
     await c.query(`UPDATE campaigns SET name=$2, description=$3, promo_description=$4, start_date=$5, end_date=$6, product_ids=$7, years=$8,
-        historical_statuses=$9, filters=$10, goal_contacts=$11, goal_conversions=$12, goal_revenue=$13, followup_days=$14, max_attempts=$15, updated_at=now()
+        historical_statuses=$9, filters=$10, goal_contacts=$11, goal_conversions=$12, goal_revenue=$13, followup_days=$14, max_attempts=$15,
+        followup_schedule=$16, updated_at=now()
       WHERE id=$1`, [id, d.name, d.description ?? null, d.promo_description ?? null, d.start_date ?? null, d.end_date ?? null, d.product_ids, d.years,
-      d.historical_statuses, d.filters, d.goal_contacts ?? null, d.goal_conversions ?? null, d.goal_revenue ?? null, d.followup_days, d.max_attempts]);
+      d.historical_statuses, d.filters, d.goal_contacts ?? null, d.goal_conversions ?? null, d.goal_revenue ?? null, d.followup_days, d.max_attempts, d.followup_schedule]);
     await saveSellers(c, id, d.seller_ids);
   });
   await audit(req, 'campanha_editada', 'campaign', id, { name: d.name });
@@ -159,14 +165,14 @@ r.post('/:id/duplicate', requireAdmin, ah(async (req, res) => {
   const { name } = parse(z.object({ name: z.string().trim().min(3).max(120).optional() }), req.body || {});
   const newId = await tx(async (cl) => {
     const row = (await cl.query(`INSERT INTO campaigns(name, description, promo_description, product_ids, years, historical_statuses, filters,
-        goal_contacts, goal_conversions, goal_revenue, followup_days, max_attempts, template_from_id, created_by)
+        goal_contacts, goal_conversions, goal_revenue, followup_days, max_attempts, template_from_id, created_by, followup_schedule)
       SELECT $2, description, promo_description, product_ids, years, historical_statuses, filters, goal_contacts, goal_conversions, goal_revenue,
-        followup_days, max_attempts, id, $3 FROM campaigns WHERE id=$1 RETURNING id`, [id, name || `${c.name.replace(/^\[DEMO\]\s*/, '')} (cópia)`, req.user.id])).rows[0];
+        followup_days, max_attempts, id, $3, followup_schedule FROM campaigns WHERE id=$1 RETURNING id`, [id, name || `${c.name.replace(/^\[DEMO\]\s*/, '')} (cópia)`, req.user.id])).rows[0];
     await cl.query(`INSERT INTO campaign_sellers SELECT $2, user_id FROM campaign_sellers WHERE campaign_id=$1`, [id, row.id]);
     const tpls = (await cl.query(`SELECT * FROM message_templates WHERE campaign_id=$1 AND active ORDER BY id`, [id])).rows;
     for (const t of tpls) {
-      const nt = (await cl.query(`INSERT INTO message_templates(campaign_id, name, kind, step, product_id, ref_year, historical_status, body, created_by)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`, [row.id, t.name, t.kind, t.step, t.product_id, t.ref_year, t.historical_status, t.body, req.user.id])).rows[0];
+      const nt = (await cl.query(`INSERT INTO message_templates(campaign_id, name, kind, step, product_id, ref_year, historical_status, body, created_by, client_status)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`, [row.id, t.name, t.kind, t.step, t.product_id, t.ref_year, t.historical_status, t.body, req.user.id, t.client_status])).rows[0];
       await cl.query('INSERT INTO message_template_versions(template_id, version, body, created_by) VALUES ($1,1,$2,$3)', [nt.id, t.body, req.user.id]);
     }
     return row.id;

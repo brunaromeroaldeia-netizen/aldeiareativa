@@ -4,7 +4,8 @@ import { many, one, tx } from '../db.js';
 import { ah, bad, parse, intParam, notFound, forbidden, conflict } from '../lib/http.js';
 import { audit } from '../lib/audit.js';
 import { today, addDays } from '../lib/dates.js';
-import { renderTemplate, templateData, pickTemplate } from '../lib/template.js';
+import { renderTemplate, templateData, pickTemplate, templateMatches, stageLabel, stageShort } from '../lib/template.js';
+import { planAfterSend, windowText } from '../services/sequence.js';
 import { getSettings } from './settings.js';
 import { participantWhere, PARTICIPANT_FROM, PARTICIPANT_COLUMNS, nextAction, queueCounts, contactWarnings } from '../services/participants.js';
 
@@ -45,7 +46,7 @@ r.get('/board', ah(async (req, res) => {
 async function loadParticipant(id, req, { lock, client } = {}) {
   const q = client ? (sql, p) => client.query(sql, p).then((x) => x.rows[0]) : one;
   const p = await q(`SELECT cc.*, c.name AS campaign_name, c.status AS campaign_status, c.followup_days, c.max_attempts, c.product_ids,
-      c.promo_description, c.is_demo AS campaign_is_demo
+      c.promo_description, c.is_demo AS campaign_is_demo, c.end_date AS campaign_end_date, c.followup_schedule
     FROM campaign_contacts cc JOIN campaigns c ON c.id=cc.campaign_id WHERE cc.id=$1 ${lock ? 'FOR UPDATE OF cc' : ''}`, [id]);
   if (!p) throw notFound('Contato da campanha não encontrado.');
   if (req.user.role !== 'admin' && p.assigned_to !== req.user.id) throw notFound('Contato da campanha não encontrado.');
@@ -57,19 +58,41 @@ function canAct(req, p) {
   if (p.assigned_to !== req.user.id) throw forbidden('Este contato está atribuído a outra vendedora. Peça a reatribuição à administradora.');
 }
 
+const campaignOf = (p) => ({ end_date: p.campaign_end_date, followup_days: p.followup_days, max_attempts: p.max_attempts, followup_schedule: p.followup_schedule });
+
+/**
+ * Mensagem da etapa REAL do contato (1ª abordagem = inicial, 2ª = follow-up 1, 3ª = follow-up 2).
+ * {{vendedora}} = primeiro nome da vendedora responsável pelo contato (nunca de quem está vendo).
+ */
 async function buildMessage(p, contact, opportunity, seller, settings, templateId) {
   const templates = await many('SELECT * FROM message_templates WHERE campaign_id=$1 AND active ORDER BY step, id', [p.campaign_id]);
   const step = p.attempts + 1;
-  const ctx = { step, product_id: opportunity?.product_id ?? p.product_ids?.[0] ?? null, ref_year: opportunity?.ref_year ?? null, historical_status: opportunity?.historical_status ?? null };
-  let tpl = templateId ? templates.find((t) => t.id === templateId) : pickTemplate(templates, ctx);
+  const ctx = {
+    step, product_id: opportunity?.product_id ?? p.product_ids?.[0] ?? null, ref_year: opportunity?.ref_year ?? null,
+    historical_status: opportunity?.historical_status ?? null, client_status: contact.client_status ?? null,
+  };
+  const auto = pickTemplate(templates, ctx);
+  const tpl = templateId ? templates.find((t) => t.id === templateId) || auto : auto;
   const product = ctx.product_id ? await one('SELECT name FROM products WHERE id=$1', [ctx.product_id]) : null;
   const data = templateData({ contact, opportunity, product, campaign: { name: p.campaign_name }, seller, unit: settings.unidade_padrao });
-  const rendered = tpl ? renderTemplate(tpl.body, data) : { text: '', warnings: [step > 1 ? 'Nenhuma mensagem de follow-up cadastrada para esta etapa.' : 'Nenhuma mensagem inicial cadastrada para este segmento.'] };
-  if (!contact.first_name) rendered.warnings.unshift('Contato sem primeiro nome identificado — revise a saudação antes de enviar.');
+  const warnings = [];
+  let rendered = { text: '', warnings: [] };
+  if (tpl) rendered = renderTemplate(tpl.body, data);
+  else if (contact.client_status === 'ativo') warnings.push('Cliente ativo: esta campanha não sugere mensagem automática para clientes ativos.');
+  else if (ctx.historical_status === 'ganho' && templates.some((t) => t.client_status === 'inativo' && t.step === (step <= 1 ? 1 : t.step) && templateMatches(t, { ...ctx, client_status: 'inativo' }))) {
+    warnings.push('Ex-cliente sem confirmação de que não é mais cliente ativo. Confirme a situação atual em “Situação do cliente” para liberar a mensagem de ex-clientes.');
+  } else warnings.push(step > 1 ? `Nenhum modelo de ${stageShort(step)} cadastrado nesta campanha.` : 'Nenhuma mensagem inicial cadastrada para este segmento.');
+  if (tpl && !contact.first_name) warnings.push('Contato sem primeiro nome identificado: a saudação ficou sem nome. Revise antes de enviar.');
+  const needsSeller = !seller;
+  if (needsSeller) warnings.unshift('Contato sem vendedora responsável. Atribua o contato antes de copiar a mensagem (o nome de quem envia entra em {{vendedora}}).');
+  const tplStep = tpl ? (tpl.kind === 'inicial' ? 1 : tpl.step) : null;
   return {
-    step, template: tpl ? { id: tpl.id, name: tpl.name, version: tpl.version, kind: tpl.kind, step: tpl.step } : null,
-    text: rendered.text, warnings: rendered.warnings,
-    options: templates.map((t) => ({ id: t.id, name: t.name, kind: t.kind, step: t.step, product_id: t.product_id, ref_year: t.ref_year, historical_status: t.historical_status })),
+    step, stage_label: stageLabel(step), needs_seller: needsSeller,
+    template: tpl ? { id: tpl.id, name: tpl.name, version: tpl.version, kind: tpl.kind, step: tplStep, stage: stageShort(tplStep), auto: !!auto && auto.id === tpl.id } : null,
+    stage_mismatch: tpl ? tplStep !== step : false,
+    text: rendered.text, warnings: [...warnings, ...rendered.warnings.filter((w) => !(needsSeller && /Nome de quem envia/.test(w)))],
+    options: templates.map((t) => ({ id: t.id, name: t.name, kind: t.kind, step: t.kind === 'inicial' ? 1 : t.step, stage: stageShort(t.kind === 'inicial' ? 1 : t.step),
+      product_id: t.product_id, ref_year: t.ref_year, historical_status: t.historical_status, client_status: t.client_status, suits: templateMatches(t, ctx) })),
   };
 }
 
@@ -97,11 +120,11 @@ r.get('/:id', ah(async (req, res) => {
   const warnings = await contactWarnings(p.contact_id, p.campaign_id, Number(settings.janela_abordagem_recente_dias ?? 30));
   if (contact.do_not_contact) warnings.unshift({ level: 'danger', msg: 'Contato pediu para não receber comunicações (opt-out). Não envie mensagens.' });
   const templateId = req.query.template_id ? Number(req.query.template_id) : null;
-  // {{vendedora}} = quem abriu o contato (é quem vai copiar e enviar), nunca o responsável antigo
-  const message = await buildMessage(p, contact, opportunity, req.user, settings, templateId);
+  // {{vendedora}} = vendedora responsável pelo contato, independentemente de quem está vendo
+  const message = await buildMessage(p, contact, opportunity, seller, settings, templateId);
   const t = today();
   res.json({
-    participant: { ...p, next_action: nextAction({ ...p, next_due: followups.find((f) => f.status === 'pendente')?.due_date, next_due_type: followups.find((f) => f.status === 'pendente')?.type }, t) },
+    participant: { ...p, next_action: nextAction({ ...p, next_due: followups.find((f) => f.status === 'pendente')?.due_date, next_due_until: followups.find((f) => f.status === 'pendente')?.due_until, next_due_type: followups.find((f) => f.status === 'pendente')?.type }, t) },
     contact, opportunity, seller, opportunities, events, followups, history, warnings, message, today: t,
     canAct: req.user.role === 'admin' || p.assigned_to === req.user.id,
   });
@@ -142,40 +165,53 @@ r.post('/:id/send', ah(async (req, res) => {
     template_version: z.number().int().nullable().optional(),
     expected_attempts: z.number().int().min(0),
     note: z.string().max(2000).optional(),
+    allow_stage_mismatch: z.boolean().optional(),
+    allow_early: z.boolean().optional(),
   }), req.body);
   const result = await tx(async (c) => {
     const p = await loadParticipant(id, req, { lock: true, client: c });
     canAct(req, p);
-    if (!p.assigned_to && req.user.role !== 'admin') throw forbidden('Contato sem responsável definido.');
+    if (!p.assigned_to) throw bad('Atribua o contato a uma vendedora antes de registrar o envio.');
     if (p.campaign_status !== 'ativa') throw bad(`A campanha está ${p.campaign_status}. Envios só podem ser registrados em campanhas ativas.`);
     const ct = (await c.query('SELECT do_not_contact FROM contacts WHERE id=$1', [p.contact_id])).rows[0];
     if (ct.do_not_contact) throw bad('Contato com bloqueio de comunicação (opt-out).');
     if (p.attempts !== d.expected_attempts) throw conflict('Este envio já foi registrado (possivelmente em outra aba ou por outra pessoa). Atualize a ficha.');
     if (!SENDABLE.includes(p.status)) throw bad('A situação atual deste contato não permite registrar um novo envio de reativação.');
+    if (p.attempts >= p.max_attempts && p.status !== 'retorno_futuro') throw bad(`Limite de ${p.max_attempts} abordagens atingido nesta campanha. Não são feitas novas tentativas por ausência de resposta.`);
     const attempts = p.attempts + 1;
     const t = today();
+    // etapa correta do modelo
+    if (d.template_id) {
+      const tpl = (await c.query('SELECT kind, step FROM message_templates WHERE id=$1 AND campaign_id=$2', [d.template_id, p.campaign_id])).rows[0];
+      const tplStep = tpl ? (tpl.kind === 'inicial' ? 1 : tpl.step) : attempts;
+      if (tpl && tplStep !== attempts && !d.allow_stage_mismatch) {
+        throw bad(`O modelo selecionado é de ${stageShort(tplStep)}, mas o contato está na etapa ${stageLabel(attempts)}. Escolha o modelo da etapa ou confirme explicitamente o uso deste modelo.`);
+      }
+    }
+    // evita abordagens em intervalo curto demais
+    const pending = (await c.query(`SELECT * FROM followups WHERE campaign_contact_id=$1 AND status='pendente' AND type='followup' ORDER BY due_date LIMIT 1`, [p.id])).rows[0];
+    if (!d.allow_early) {
+      if (pending && pending.due_date > t) throw bad(`O ${stageShort(attempts)} está previsto ${windowText(pending)}. Enviar antes disso exige confirmação explícita.`);
+      if (p.last_sent_at && Date.now() - new Date(p.last_sent_at).getTime() < 20 * 3600 * 1000) throw bad('Já houve envio para este contato nas últimas horas. Para enviar de novo agora, confirme explicitamente.');
+    }
     const fromStatus = p.status;
     const status = attempts === 1 ? 'enviada' : 'aguardando';
     // follow-ups pendentes desta etapa são concluídos pelo envio
     const done = await c.query(`UPDATE followups SET status='realizado', completed_at=now(), completed_by=$2 WHERE campaign_contact_id=$1 AND status='pendente' RETURNING id`, [p.id, req.user.id]);
-    let nextDue = null;
-    let deadline = null;
-    if (attempts < p.max_attempts) {
-      nextDue = addDays(t, p.followup_days);
-      await c.query(`INSERT INTO followups(campaign_contact_id, campaign_id, type, step, due_date, created_by) VALUES ($1,$2,'followup',$3,$4,$5)`,
-        [p.id, p.campaign_id, attempts + 1, nextDue, req.user.id]);
-    } else {
-      deadline = addDays(t, p.followup_days);
+    const plan = planAfterSend(campaignOf(p), attempts, t);
+    if (plan.followup) {
+      await c.query(`INSERT INTO followups(campaign_contact_id, campaign_id, type, step, due_date, due_until, created_by) VALUES ($1,$2,'followup',$3,$4,$5,$6)`,
+        [p.id, p.campaign_id, plan.followup.step, plan.followup.due, plan.followup.until, req.user.id]);
     }
     await c.query(`UPDATE campaign_contacts SET attempts=$2, status=$3, first_sent_at=COALESCE(first_sent_at, now()), last_sent_at=now(),
-        no_response_deadline=$4, return_date=NULL, updated_at=now(),
-        assigned_to=COALESCE(assigned_to, $5), assigned_at=COALESCE(assigned_at, now()) WHERE id=$1`,
-      [p.id, attempts, status, deadline, req.user.id]);
+        no_response_deadline=$4, return_date=NULL, updated_at=now() WHERE id=$1`, [p.id, attempts, status, plan.deadline]);
+    const notes = [d.note, done.rowCount && attempts > 1 ? `${stageShort(attempts)} realizado` : null,
+      d.allow_stage_mismatch ? 'Modelo de outra etapa usado com confirmação' : null, d.allow_early ? 'Enviado antes do prazo com confirmação' : null].filter(Boolean);
     await addEvent(c, p, req, { type: 'envio', attempt: attempts, from: fromStatus, to: status, text: d.message_text,
-      template_id: d.template_id ?? null, template_version: d.template_version ?? null, note: d.note || (done.rowCount ? `Follow-up realizado (${attempts}ª abordagem)` : null) });
-    if (nextDue) await addEvent(c, p, req, { type: 'followup_agendado', note: `Follow-up agendado para ${nextDue.split('-').reverse().join('/')}` });
-    else await addEvent(c, p, req, { type: 'sistema', note: `Limite de ${p.max_attempts} abordagens atingido. Sem resposta até ${deadline.split('-').reverse().join('/')}, o contato será encerrado como "sem resposta".` });
-    return { attempts, status, nextDue, deadline };
+      template_id: d.template_id ?? null, template_version: d.template_version ?? null, note: notes.join(' · ') || null });
+    if (plan.followup) await addEvent(c, p, req, { type: 'followup_agendado', note: `${stageShort(plan.followup.step)} agendado ${windowText({ due_date: plan.followup.due, due_until: plan.followup.until })}` });
+    if (plan.note) await addEvent(c, p, req, { type: 'sistema', note: plan.note });
+    return { attempts, status, nextDue: plan.followup?.due ?? null, nextUntil: plan.followup?.until ?? null, nextStage: plan.followup ? stageShort(plan.followup.step) : null, deadline: plan.deadline, note: plan.note };
   });
   res.json(result);
 }));
@@ -258,8 +294,8 @@ r.post('/:id/outcome', ah(async (req, res) => {
       // reabre a sequência: agenda novo follow-up se não houver
       const has = (await c.query(`SELECT 1 FROM followups WHERE campaign_contact_id=$1 AND status='pendente'`, [p.id])).rowCount;
       if (!has) {
-        const due = addDays(today(), p.followup_days);
-        await c.query(`INSERT INTO followups(campaign_contact_id, campaign_id, type, step, due_date, created_by) VALUES ($1,$2,'followup',$3,$4,$5)`, [p.id, p.campaign_id, p.attempts + 1, due, req.user.id]);
+        const plan = planAfterSend(campaignOf(p), p.attempts, today());
+        if (plan.followup) await c.query(`INSERT INTO followups(campaign_contact_id, campaign_id, type, step, due_date, due_until, created_by) VALUES ($1,$2,'followup',$3,$4,$5,$6)`, [p.id, p.campaign_id, plan.followup.step, plan.followup.due, plan.followup.until, req.user.id]);
       }
     }
     return { status: d.status };
@@ -299,6 +335,7 @@ r.post('/:id/followup', ah(async (req, res) => {
     if (p.campaign_status === 'encerrada' && req.user.role !== 'admin') throw bad('Campanha encerrada: apenas a administradora pode reprogramar.');
     if (['convertido', 'opt_out'].includes(p.status)) throw bad('Contato convertido ou em opt-out não recebe follow-up.');
     if (d.due_date && d.due_date < today()) throw bad('Escolha uma data a partir de hoje.');
+    if (d.due_date && p.campaign_end_date && d.due_date > p.campaign_end_date && p.status !== 'retorno_futuro') throw bad(`A campanha termina em ${p.campaign_end_date.split('-').reverse().join('/')}. Não é possível agendar follow-up depois disso.`);
     await cancelFollowups(c, p, req, d.due_date ? 'reprogramado' : 'cancelado manualmente');
     if (d.due_date) {
       const type = p.status === 'retorno_futuro' ? 'retorno' : 'followup';

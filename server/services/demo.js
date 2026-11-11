@@ -1,6 +1,7 @@
 import { many, one, tx } from '../db.js';
 import { today, addDays } from '../lib/dates.js';
 import { formatPhone, firstNameOf } from '../lib/normalize.js';
+import { applyBlackFridayPackage, applyDemoExClients } from './blackFriday.js';
 
 // Gerador determinístico (os mesmos dados a cada carga)
 function rng(seed = 42) {
@@ -207,6 +208,9 @@ export async function loadDemo(userId) {
     };
     await simulate(bf, bfParts, { startDate: addDays(t, -12) < '2026-11-01' ? addDays(t, -12) : '2026-11-01', endDate: '2026-11-30', closed: false });
     await simulate(fiscal, fiscalParts, { startDate: '2026-08-01', endDate: '2026-08-31', closed: true });
+    // modelos, condições e regras da Black Friday de Mesa + ex-clientes fictícios para testar o modelo de ex-clientes
+    await applyBlackFridayPackage(c, bf.id, userId);
+    await applyDemoExClients(c, bf.id, userId);
     await c.query(`UPDATE imports SET stats=jsonb_build_object('total', (SELECT count(*) FROM opportunities WHERE import_id=$1),
       'commit', jsonb_build_object('opportunitiesCreated', (SELECT count(*) FROM opportunities WHERE import_id=$1), 'contactsCreated', (SELECT count(DISTINCT contact_id) FROM opportunities WHERE import_id=$1))) WHERE id=$1`, [imp.id]);
     await c.query(`INSERT INTO audit_log(user_id, action, entity, details) VALUES ($1,'demo_carregada','demo',$2)`, [userId, { contacts: contacts.length }]);

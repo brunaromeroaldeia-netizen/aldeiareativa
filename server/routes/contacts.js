@@ -84,7 +84,8 @@ r.get('/:id', ah(async (req, res) => {
     const ok = await one('SELECT 1 FROM campaign_contacts WHERE contact_id=$1 AND assigned_to=$2', [id, req.user.id]);
     if (!ok) throw notFound();
   }
-  const contact = await one(`SELECT ct.*, u.name AS dnc_by_name FROM contacts ct LEFT JOIN users u ON u.id=ct.dnc_by WHERE ct.id=$1`, [id]);
+  const contact = await one(`SELECT ct.*, u.name AS dnc_by_name, cu.name AS client_status_by_name FROM contacts ct
+    LEFT JOIN users u ON u.id=ct.dnc_by LEFT JOIN users cu ON cu.id=ct.client_status_by WHERE ct.id=$1`, [id]);
   if (!contact) throw notFound();
   const opportunities = await many(`SELECT o.*, p.name AS product_name, i.filename AS import_filename FROM opportunities o
     LEFT JOIN products p ON p.id=o.product_id LEFT JOIN imports i ON i.id=o.import_id
@@ -214,6 +215,21 @@ r.patch('/opportunities/:oppId', requireAdmin, ah(async (req, res) => {
       updated_at=now() WHERE id=$1`,
   [oppId, 'product_id' in d, d.product_id ?? null, 'ref_year' in d, d.ref_year ?? null, d.historical_status ?? null, d.note ?? null]);
   await audit(req, 'oportunidade_ajustada', 'opportunity', oppId, { before: { product_id: cur.product_id, ref_year: cur.ref_year, historical_status: cur.historical_status }, after: d });
+  res.json({ ok: true });
+}));
+
+/** Situação atual como cliente: 'ativo', 'inativo' (ex-cliente confirmado) ou null (não confirmada). */
+r.post('/:id/client-status', ah(async (req, res) => {
+  const id = intParam(req.params.id);
+  const { status } = parse(z.object({ status: z.enum(['ativo', 'inativo']).nullable() }), req.body);
+  if (req.user.role !== 'admin') {
+    const ok = await one('SELECT 1 FROM campaign_contacts WHERE contact_id=$1 AND assigned_to=$2', [id, req.user.id]);
+    if (!ok) throw forbidden();
+  }
+  const cur = await one('SELECT client_status FROM contacts WHERE id=$1', [id]);
+  if (!cur) throw notFound();
+  await query(`UPDATE contacts SET client_status=$2, client_status_at=now(), client_status_by=$3, updated_at=now() WHERE id=$1`, [id, status, req.user.id]);
+  await audit(req, 'situacao_cliente_alterada', 'contact', id, { from: cur.client_status, to: status });
   res.json({ ok: true });
 }));
 

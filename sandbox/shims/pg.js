@@ -5,7 +5,8 @@ export function setDatabase(promise) { dbPromise = promise; }
 async function run(text, params) {
   const db = await dbPromise;
   const r = await db.query(text, params || []);
-  return { rows: r.rows, rowCount: r.affectedRows ?? r.rows.length, fields: r.fields };
+  // como no driver pg: SELECT/RETURNING contam as linhas devolvidas; demais comandos, as linhas afetadas
+  return { rows: r.rows, rowCount: r.rows.length > 0 ? r.rows.length : (r.affectedRows ?? 0), fields: r.fields };
 }
 
 class Client {
