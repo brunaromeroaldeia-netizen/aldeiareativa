@@ -5,7 +5,7 @@
   "description": "Aldeia Reativa — plataforma de reativação comercial da Aldeia Coworking",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "NODE_ENV=development node --watch-path=server server/index.js",
