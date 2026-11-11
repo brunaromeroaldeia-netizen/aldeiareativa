@@ -12,12 +12,16 @@ export const config = {
   databaseUrl: process.env.DATABASE_URL || 'postgres://aldeia:devpass@localhost:5432/aldeia_reativa',
   databaseSsl: process.env.DATABASE_SSL === 'true',
   // na Render, RENDER_EXTERNAL_URL é preenchida automaticamente com o endereço público do site
-  appUrl: process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 3000}`,
+  appUrl: process.env.APP_URL || process.env.RENDER_EXTERNAL_URL
+    || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null)
+    || `http://localhost:${process.env.PORT || 3000}`,
+  cronSecret: process.env.CRON_SECRET || null,
+  serverless: Boolean(process.env.VERCEL),
   setupCode: process.env.SETUP_CODE || null,
   allowDemo: process.env.ALLOW_DEMO ? process.env.ALLOW_DEMO === 'true' : process.env.NODE_ENV !== 'production',
   uploadDir: process.env.UPLOAD_DIR || path.join(root, 'uploads'),
   backupDir: process.env.BACKUP_DIR || path.join(root, 'backups'),
-  maxUploadMb: Number(process.env.MAX_UPLOAD_MB || 20),
+  maxUploadMb: Number(process.env.MAX_UPLOAD_MB || (process.env.VERCEL ? 4 : 20)), // a Vercel limita cada envio a 4,5 MB
   sessionDays: Number(process.env.SESSION_DAYS || 7),
   sessionIdleHours: Number(process.env.SESSION_IDLE_HOURS || 12),
   timezone: process.env.APP_TIMEZONE || 'America/Sao_Paulo',

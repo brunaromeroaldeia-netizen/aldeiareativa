@@ -6,12 +6,16 @@ pg.types.setTypeParser(1082, (v) => v);
 pg.types.setTypeParser(1700, (v) => (v === null ? null : Number(v)));
 pg.types.setTypeParser(20, (v) => Number(v));
 
+// Supabase (pooler): o fuso e o schema vêm das configurações do próprio usuário do banco,
+// pois o pooler não repassa parâmetros de inicialização. Nos demais casos, definimos na conexão.
+const usesPooler = /pooler\.supabase\.com/.test(config.databaseUrl);
 export const pool = new pg.Pool({
   connectionString: config.databaseUrl,
-  ssl: config.databaseSsl ? { rejectUnauthorized: false } : undefined,
-  max: 10,
+  ssl: config.databaseSsl || usesPooler ? { rejectUnauthorized: false } : undefined,
+  max: process.env.VERCEL ? 3 : 10,
+  idleTimeoutMillis: process.env.VERCEL ? 10000 : 30000,
   // fuso da operação: CURRENT_DATE e conversões ::date seguem o horário de Brasília
-  options: `-c timezone=${config.timezone.replace(/[^\w/+-]/g, '')}`,
+  ...(usesPooler ? {} : { options: `-c timezone=${config.timezone.replace(/[^\w/+-]/g, '')}` }),
 });
 
 export const query = (text, params) => pool.query(text, params);

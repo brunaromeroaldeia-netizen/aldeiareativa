@@ -186,10 +186,9 @@ function DataTab() {
       </Card>
       ) : (
       <Card>
-        <CardHeader title="Backup do banco de dados" subtitle="Cópia completa (pg_dump). Recomenda-se também o backup automático diário no servidor (npm run backup)." />
+        <CardHeader title="Backup do banco de dados" subtitle="Cópia completa de todos os dados (contatos, campanhas, mensagens, históricos e planilhas importadas). Guarde o arquivo em local seguro: ele contém dados pessoais." />
         <div className="px-5 pb-5 space-y-3">
           <Button icon={Database} loading={busy === 'bk'} onClick={() => run('bk', () => download('/admin/backup'), 'Backup gerado')}>Baixar backup agora</Button>
-          <p className="text-[12px] text-muted">Restauração: <code className="font-mono">pg_restore --clean --if-exists --no-owner -d $DATABASE_URL arquivo.dump</code></p>
         </div>
       </Card>
       )}

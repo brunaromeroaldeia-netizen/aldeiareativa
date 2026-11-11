@@ -8,3 +8,4 @@ backups/*
 *.log
 aldeia-reativa*.tar.gz
 dist-teste/
+.vercel

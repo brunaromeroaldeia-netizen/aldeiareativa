@@ -46,11 +46,21 @@ export async function createApp() {
     }
     next();
   });
+  // rotina diária agendada pela Vercel (protegida pelo CRON_SECRET)
+  api.get('/cron/agenda', async (req, res, next) => {
+    if (!config.cronSecret || req.get('authorization') !== `Bearer ${config.cronSecret}`) return next(new HttpError(401, 'Não autorizado.'));
+    try { res.json(await runScheduler()); } catch (e) { next(e); }
+  });
   api.use(loadUser);
   // garante a agenda atualizada mesmo se o servidor ficou suspenso (no máximo 1x por minuto)
   let lastRun = 0;
-  api.use((req, _res, next) => {
-    if (req.user && Date.now() - lastRun > 60000) { lastRun = Date.now(); runScheduler().catch(() => {}); }
+  api.use(async (req, _res, next) => {
+    if (req.user && Date.now() - lastRun > 60000) {
+      lastRun = Date.now();
+      const run = runScheduler().catch((e) => console.error('[agenda]', e.message));
+      // sem servidor contínuo (Vercel), a rotina precisa terminar antes da resposta
+      if (config.serverless) await run;
+    }
     next();
   });
   api.get('/health', async (_req, res) => { await pool.query('SELECT 1'); res.json({ ok: true }); });
@@ -70,7 +80,7 @@ export async function createApp() {
   api.use((_req, _res, next) => next(new HttpError(404, 'Rota não encontrada.')));
   app.use('/api', api);
 
-  if (config.isProd) {
+  if (config.isProd && !config.serverless) {
     const dist = path.join(config.root, 'dist');
     app.use(express.static(dist, { index: false, maxAge: '7d', immutable: true }));
     app.get('*', (_req, res) => res.sendFile(path.join(dist, 'index.html')));

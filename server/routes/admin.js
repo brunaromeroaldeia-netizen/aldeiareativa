@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { spawn } from 'node:child_process';
 import { config } from '../config.js';
-import { one } from '../db.js';
+import zlib from 'node:zlib';
+import { one, many } from '../db.js';
 import { ah, bad } from '../lib/http.js';
 import { audit } from '../lib/audit.js';
 import { loadDemo, removeDemo } from '../services/demo.js';
@@ -25,9 +26,24 @@ r.delete('/demo', ah(async (req, res) => res.json(await removeDemo(req.user.id))
 
 r.post('/scheduler/run', ah(async (_req, res) => res.json(await runScheduler())));
 
+/** Backup em JSON compactado (usado quando o pg_dump não existe no servidor, ex.: Vercel). */
+async function jsonBackup(res) {
+  const tables = (await many(`SELECT tablename FROM pg_tables WHERE schemaname = current_schema() ORDER BY tablename`)).map((t) => t.tablename);
+  const out = { gerado_em: new Date().toISOString(), formato: 'aldeia-reativa-json-1', tabelas: {} };
+  for (const t of tables) {
+    const rows = await many(`SELECT * FROM "${t.replace(/"/g, '')}"`);
+    out.tabelas[t] = t === 'imports' ? rows.map(({ file_data, ...rest }) => ({ ...rest, file_data: file_data ? Buffer.from(file_data).toString('base64') : null })) : rows;
+  }
+  const gz = zlib.gzipSync(Buffer.from(JSON.stringify(out)));
+  res.setHeader('Content-Type', 'application/gzip');
+  res.setHeader('Content-Disposition', `attachment; filename="aldeia-reativa-${today()}.json.gz"`);
+  res.end(gz);
+}
+
 /** Backup completo do banco (pg_dump, formato custom). */
 r.get('/backup', ah(async (req, res) => {
   await audit(req, 'backup_baixado', 'system', null);
+  if (config.serverless) return jsonBackup(res);
   res.setHeader('Content-Type', 'application/octet-stream');
   res.setHeader('Content-Disposition', `attachment; filename="aldeia-reativa-${today()}.dump"`);
   const dump = spawn('pg_dump', ['--format=custom', '--no-owner', `--dbname=${config.databaseUrl}`]);

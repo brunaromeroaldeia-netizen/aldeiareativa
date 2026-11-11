@@ -130,6 +130,22 @@ Pacote com 5 modelos (3 iniciais por status histórico, 2 follow-ups), condiçõ
 - `{{vendedora}}` é a vendedora responsável pelo contato. Sem responsável, a cópia e o envio ficam bloqueados até a atribuição.
 - O modelo de ex-clientes só é sugerido quando a ficha do contato está marcada como “Ex-cliente (não é mais cliente)”. Clientes ativos não entram na campanha e não recebem mensagem automática.
 
+## Publicar o site oficial (Vercel + Supabase)
+
+- **Banco (Supabase):** o sistema usa um schema próprio, `reativa`, e uma usuária própria do banco, `aldeia_app` (sem acesso a outros schemas). O schema não é exposto pela API pública do Supabase. Preparação, uma única vez, no SQL Editor:
+  ```sql
+  CREATE ROLE aldeia_app LOGIN PASSWORD '<senha forte>';
+  CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA extensions;
+  GRANT USAGE ON SCHEMA extensions TO aldeia_app;
+  CREATE SCHEMA reativa AUTHORIZATION aldeia_app;
+  ALTER ROLE aldeia_app SET search_path = reativa, extensions;
+  ALTER ROLE aldeia_app SET timezone = 'America/Sao_Paulo';
+  ```
+- **Site (Vercel):** importe o repositório. `vercel.json` já define build, rotas e a rotina diária (`/api/cron/agenda`). Variáveis de ambiente:
+  `DATABASE_URL` (pooler do Supabase, modo *transaction*, porta 6543, usuária `aldeia_app.<ref do projeto>`), `NODE_ENV=production`, `SETUP_CODE`, `CRON_SECRET`, `ALLOW_DEMO=false`, `NODEJS_HELPERS=0`.
+- As migrações rodam sozinhas na primeira requisição (com trava, seguras com várias instâncias). A campanha Black Friday de Mesa é criada automaticamente como rascunho.
+- Limites: planilhas de até 4 MB por envio (limite da Vercel); backup em *Configurações › Dados e backup* sai em JSON compactado.
+
 ## Publicar o site oficial (Render)
 
 1. Suba este repositório para um repositório **privado** no GitHub.

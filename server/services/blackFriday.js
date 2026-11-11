@@ -203,6 +203,7 @@ export const BF_INITIAL = 'campanha-inicial-black-friday-mesa-2026';
  */
 export async function ensureBlackFridayCampaign() {
   return tx(async (c) => {
+    await c.query('SELECT pg_advisory_xact_lock(727202)'); // evita criar a campanha duas vezes em inicializações simultâneas
     if ((await c.query('SELECT 1 FROM data_updates WHERE name=$1', [BF_INITIAL])).rows.length) return null;
     let camp = (await findBlackFridayCampaigns(c))[0];
     let created = false;
