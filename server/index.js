@@ -84,7 +84,7 @@ export async function createApp() {
     const dist = path.join(config.root, 'dist');
     app.use(express.static(dist, { index: false, maxAge: '7d', immutable: true }));
     app.get('*', (_req, res) => res.sendFile(path.join(dist, 'index.html')));
-  } else if (process.env.NO_VITE !== '1') {
+  } else if (!config.isProd && !config.serverless && process.env.NO_VITE !== '1') {
     const { createServer } = await import('vite');
     const vite = await createServer({ server: { middlewareMode: true }, appType: 'spa', root: path.join(config.root, 'client') });
     app.use(vite.middlewares);
