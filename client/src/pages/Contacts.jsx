@@ -220,6 +220,12 @@ export function ContactDetail() {
                     {o.lost_reason ? ` · Motivo: ${o.lost_reason}` : ''}{o.value ? ` · ${fmtMoney(o.value)}` : ''}{o.original_owner ? ` · Resp.: ${o.original_owner}` : ''}
                   </p>
                   {o.review_reasons?.length > 0 && <p className="text-[12px] text-amber-800 mt-1">{o.review_reasons.join(' · ')}</p>}
+                  {o.history?.map((h, i) => (
+                    <p key={i} className="text-[12px] text-sky-800 mt-1">
+                      Atualizada em {fmtDate(h.created_at)}{h.filename ? ` pela importação “${h.filename}”` : ''}{h.user_name ? ` (${h.user_name})` : ''}:{' '}
+                      {h.changes.map((c) => `${c.label} ${c.field.endsWith('_date') ? `${fmtDate(c.from)} → ${fmtDate(c.to)}` : c.field === 'value' ? `${fmtMoney(c.from)} → ${fmtMoney(c.to)}` : `${c.from || '(vazio)'} → ${c.to}`}`).join(' · ')}
+                    </p>
+                  ))}
                   {isAdmin && o.import_filename && <p className="text-[11.5px] text-muted mt-0.5">Origem: {o.import_filename}{o.source_sheet ? ` › ${o.source_sheet}` : ''}{o.source_row ? `, linha ${o.source_row}` : ''}</p>}
                 </div>
               ))}

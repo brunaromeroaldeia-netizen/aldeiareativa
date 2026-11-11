@@ -89,6 +89,10 @@ r.get('/:id', ah(async (req, res) => {
   const opportunities = await many(`SELECT o.*, p.name AS product_name, i.filename AS import_filename FROM opportunities o
     LEFT JOIN products p ON p.id=o.product_id LEFT JOIN imports i ON i.id=o.import_id
     WHERE o.contact_id=$1 ORDER BY o.ref_year DESC NULLS LAST, o.id DESC`, [id]);
+  const history = opportunities.length ? await many(`SELECT h.opportunity_id, h.changes, h.created_at, i.filename, u.name AS user_name
+    FROM opportunity_history h LEFT JOIN imports i ON i.id=h.import_id LEFT JOIN users u ON u.id=h.user_id
+    WHERE h.opportunity_id = ANY($1) ORDER BY h.created_at DESC`, [opportunities.map((o) => o.id)]) : [];
+  for (const o of opportunities) o.history = history.filter((h) => h.opportunity_id === o.id);
   const participations = await many(`SELECT cc.*, c.name AS campaign_name, c.status AS campaign_status, c.start_date, c.end_date, u.name AS assigned_name,
       (SELECT json_agg(json_build_object('id', i.id, 'type', i.type, 'at', i.created_at, 'text', i.message_text, 'note', i.note, 'from', i.from_status,
           'to', i.to_status, 'user', uu.name, 'attempt', i.attempt, 'value', i.value) ORDER BY i.created_at DESC, i.id DESC)

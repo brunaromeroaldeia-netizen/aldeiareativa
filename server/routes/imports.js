@@ -109,14 +109,15 @@ r.get('/:id/rows', ah(async (req, res) => {
     novos: `match_type IN ('novo','interno')`,
     existentes: `match_type='existente'`,
     ambiguos: `match_type='ambiguo'`,
-    duplicados: `(match_type='interno' OR dup_opportunity_id IS NOT NULL OR decision='ignorar')`,
+    duplicados: `(match_type='interno' OR (dup_opportunity_id IS NOT NULL AND jsonb_array_length(opp_changes)=0) OR decision='ignorar')`,
+    situacao: `jsonb_array_length(opp_changes) > 0`,
     problemas: `EXISTS (SELECT 1 FROM jsonb_array_elements(issues) x WHERE x->>'level' IN ('erro','revisao','aviso') AND x->>'msg' <> 'Sem telefone')`,
     revisao: `historical_status='revisao'`,
     sem_telefone: `mapped->>'phone_norm' IS NULL`,
     atualizacoes: `jsonb_array_length(changes) > 0`,
   }[filter] || 'TRUE';
   const rows = await many(`SELECT r.id, r.sheet_name, r.row_number, r.mapped, r.issues, r.historical_status, r.ref_year, r.year_source, r.product_id,
-      r.match_type, r.match_contact_id, r.candidates, r.dup_opportunity_id, r.changes, r.decision, r.decision_contact_id, p.name AS product_name
+      r.match_type, r.match_contact_id, r.candidates, r.dup_opportunity_id, r.changes, r.opp_changes, r.decision, r.decision_contact_id, p.name AS product_name
     FROM import_rows r LEFT JOIN products p ON p.id=r.product_id WHERE r.import_id=$1 AND ${where} ORDER BY r.id LIMIT ${size} OFFSET ${(page - 1) * size}`, [id]);
   const { n } = await one(`SELECT count(*)::int AS n FROM import_rows WHERE import_id=$1 AND ${where}`, [id]);
   res.json({ rows, total: n, page, pageSize: size });
@@ -124,7 +125,7 @@ r.get('/:id/rows', ah(async (req, res) => {
 
 r.patch('/:id/rows/:rowId', ah(async (req, res) => {
   const id = intParam(req.params.id);
-  const d = parse(z.object({ decision: z.enum(['auto', 'criar', 'vincular', 'ignorar']), contact_id: z.number().int().nullable().optional() }), req.body);
+  const d = parse(z.object({ decision: z.enum(['auto', 'criar', 'vincular', 'ignorar', 'nova_oportunidade']), contact_id: z.number().int().nullable().optional() }), req.body);
   const row = await one('SELECT r.*, i.status FROM import_rows r JOIN imports i ON i.id=r.import_id WHERE r.id=$1 AND r.import_id=$2', [intParam(req.params.rowId), id]);
   if (!row) throw notFound();
   if (row.status !== 'analisada') throw bad('Importação não está em análise.');
@@ -137,14 +138,16 @@ r.patch('/:id/rows/:rowId', ah(async (req, res) => {
 
 r.post('/:id/bulk-decision', ah(async (req, res) => {
   const id = intParam(req.params.id);
-  const d = parse(z.object({ scope: z.enum(['ambiguos', 'duplicados_existentes']), decision: z.enum(['auto', 'criar', 'ignorar', 'vincular_sugerido']) }), req.body);
+  const d = parse(z.object({ scope: z.enum(['ambiguos', 'duplicados_existentes', 'atualizacoes']), decision: z.enum(['auto', 'criar', 'ignorar', 'vincular_sugerido']) }), req.body);
   if (d.scope === 'ambiguos') {
     if (d.decision === 'vincular_sugerido') {
       await query(`UPDATE import_rows SET decision='vincular', decision_contact_id=COALESCE(match_contact_id, (candidates->0->>'id')::int)
         WHERE import_id=$1 AND match_type='ambiguo'`, [id]);
     } else await query(`UPDATE import_rows SET decision=$2, decision_contact_id=NULL WHERE import_id=$1 AND match_type='ambiguo'`, [id, d.decision]);
+  } else if (d.scope === 'atualizacoes') {
+    await query(`UPDATE import_rows SET decision=$2 WHERE import_id=$1 AND jsonb_array_length(opp_changes) > 0`, [id, d.decision === 'ignorar' ? 'ignorar' : 'auto']);
   } else {
-    await query(`UPDATE import_rows SET decision=$2 WHERE import_id=$1 AND dup_opportunity_id IS NOT NULL`, [id, d.decision === 'ignorar' ? 'ignorar' : 'auto']);
+    await query(`UPDATE import_rows SET decision=$2 WHERE import_id=$1 AND dup_opportunity_id IS NOT NULL AND jsonb_array_length(opp_changes) = 0`, [id, d.decision === 'ignorar' ? 'ignorar' : 'auto']);
   }
   res.json(await importStats(id));
 }));

@@ -147,3 +147,60 @@ test('fluxo completo de reativação e regras de negócio', { skip }, async () =
   const rep = await fetch(`${base}/reports/campanhas?format=csv`, { headers: { cookie: '' } });
   assert.equal(rep.status, 401);
 });
+
+test('reimportação: atualiza a situação de oportunidades existentes sem duplicar nem regredir', { skip }, async () => {
+  const XLSX = (await import('xlsx')).default;
+  const admin = client();
+  await admin.login('admin@t.local');
+  let cookie = '';
+  const login = await fetch(`${base}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'aldeia-reativa' }, body: JSON.stringify({ email: 'admin@t.local', password: 'SenhaTeste123' }) });
+  cookie = login.headers.get('set-cookie').split(';')[0];
+  const api = async (method, path, body) => {
+    const r = await fetch(base + path, { method, headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'aldeia-reativa', cookie }, body: body ? JSON.stringify(body) : undefined });
+    return { status: r.status, data: await r.json() };
+  };
+  const importRows = async (rows, name) => {
+    const ws = XLSX.utils.aoa_to_sheet([['Nome', 'Telefone', 'Produto', 'Data de criação', 'Data do ganho', 'Data da perda', 'Motivo da perda'], ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Leads');
+    const fd = new FormData();
+    fd.append('file', new Blob([XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })]), name);
+    const up = await (await fetch(`${base}/imports`, { method: 'POST', headers: { 'X-Requested-With': 'aldeia-reativa', cookie }, body: fd })).json();
+    const imp = (await api('GET', `/imports/${up.id}`)).data;
+    const stats = (await api('POST', `/imports/${up.id}/analyze`, { update_rule: 'preencher_vazios', sheets: imp.sheets.map((s) => ({ id: s.id, include: true, mapping: s.mapping, default_product_id: null, default_year: null })) })).data;
+    return { id: up.id, stats };
+  };
+  const row = (lost, reason) => ['Paula Reis', '41 98888-7777', 'Mesa', '05/01/2025', '', lost, reason];
+
+  const first = await importRows([row('', '')], 'jan.xlsx');
+  assert.equal(first.stats.new_contacts, 1);
+  await api('POST', `/imports/${first.id}/commit`);
+  const contact = await db.one(`SELECT id FROM contacts WHERE phone_norm='41988887777'`);
+  assert.equal((await db.one('SELECT historical_status FROM opportunities WHERE contact_id=$1', [contact.id])).historical_status, 'aberto');
+
+  // dois meses depois: o mesmo lead foi perdido no CRM
+  const second = await importRows([row('20/02/2025', 'Preço')], 'mar.xlsx');
+  assert.equal(second.stats.opp_updates, 1);
+  assert.equal(second.stats.dup_opportunities, 0);
+  const prev = (await api('GET', `/imports/${second.id}/rows?filter=situacao`)).data.rows[0];
+  assert.deepEqual(prev.opp_changes.find((c) => c.field === 'historical_status').to, 'Perdido');
+  const done = (await api('POST', `/imports/${second.id}/commit`)).data;
+  assert.equal(done.opportunitiesUpdated, 1);
+  assert.equal(done.opportunitiesCreated, 0);
+  const opps = await db.many('SELECT * FROM opportunities WHERE contact_id=$1', [contact.id]);
+  assert.equal(opps.length, 1);
+  assert.equal(opps[0].historical_status, 'perdido');
+  assert.equal(opps[0].lost_reason, 'Preço');
+  assert.equal((await db.one('SELECT count(*)::int AS n FROM opportunity_history WHERE opportunity_id=$1', [opps[0].id])).n, 1);
+  const detail = (await api('GET', `/contacts/${contact.id}`)).data;
+  assert.equal(detail.opportunities[0].history.length, 1);
+
+  // mesma planilha de novo: nada muda
+  const third = await importRows([row('20/02/2025', 'Preço')], 'mar-de-novo.xlsx');
+  assert.equal(third.stats.opp_updates, 0);
+  assert.equal(third.stats.dup_opportunities, 1);
+  // planilha incompleta (sem data de perda) não "reabre" o lead
+  const fourth = await importRows([row('', '')], 'parcial.xlsx');
+  assert.equal(fourth.stats.opp_updates, 0);
+  assert.equal(fourth.stats.dup_opportunities, 1);
+});

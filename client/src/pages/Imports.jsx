@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { UploadCloud, FileSpreadsheet, ArrowLeft, CheckCircle2, Download, AlertTriangle } from 'lucide-react';
 import { api, download } from '../lib/api.js';
-import { fmtDateTime, fmtInt } from '../lib/format.js';
+import { fmtDateTime, fmtInt, fmtDate, fmtMoney } from '../lib/format.js';
 import {
   Card, CardHeader, PageHeader, Button, Select, Input, Checkbox, Alert, Loading, Badge, Tabs, Pagination, HistBadge, Kpi, DemoTag, Field, useToast, useConfirm, cx,
 } from '../components/ui.jsx';
@@ -172,11 +172,12 @@ export function ImportWizard() {
           {(() => {
             const c = result || stats.commit || {};
             return (
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-6 max-w-3xl mx-auto">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-6 max-w-5xl mx-auto">
                 <Kpi label="Contatos novos" value={fmtInt(c.contactsCreated)} />
                 <Kpi label="Vinculados a existentes" value={fmtInt(c.contactsLinked)} />
                 <Kpi label="Cadastros atualizados" value={fmtInt(c.contactsUpdated)} />
                 <Kpi label="Oportunidades criadas" value={fmtInt(c.opportunitiesCreated)} />
+                <Kpi label="Oportunidades atualizadas" value={fmtInt(c.opportunitiesUpdated || 0)} />
                 <Kpi label="Linhas ignoradas" value={fmtInt(c.rowsSkipped)} />
               </div>
             );
@@ -244,9 +245,11 @@ function SheetMapping({ s, fields, products, onChange, multi }) {
 }
 
 const FILTERS = [
-  ['todos', 'Todas'], ['novos', 'Novos'], ['existentes', 'Já existentes'], ['ambiguos', 'Ambíguos'], ['duplicados', 'Duplicidades'],
+  ['todos', 'Todas'], ['novos', 'Novos'], ['existentes', 'Já existentes'], ['situacao', 'Atualizações de situação'], ['ambiguos', 'Ambíguos'], ['duplicados', 'Duplicidades'],
   ['problemas', 'Inconsistências'], ['revisao', 'Revisão necessária'], ['sem_telefone', 'Sem telefone'], ['atualizacoes', 'Atualizações de cadastro'],
 ];
+const showVal = (c, v) => (v === null || v === undefined || v === '' ? '(vazio)' : c.field.endsWith('_date') ? fmtDate(v) : c.field === 'value' ? fmtMoney(v) : String(v));
+
 const MATCH = { novo: ['Novo', 'bg-emerald-50 text-emerald-700 ring-emerald-200'], interno: ['Novo (repetido no arquivo)', 'bg-emerald-50 text-emerald-700 ring-emerald-200'], existente: ['Existente', 'bg-sky-50 text-sky-800 ring-sky-200'], ambiguo: ['Ambíguo', 'bg-amber-50 text-amber-800 ring-amber-200'] };
 
 function Validation({ id, stats, products, busy, onBack, onCommit, onRemapProducts, onChanged }) {
@@ -289,6 +292,7 @@ function Validation({ id, stats, products, busy, onBack, onCommit, onRemapProduc
           <div className="flex justify-between text-sm py-0.5"><span>Linhas de contatos já existentes</span><span className="tabular">{fmtInt(stats.existing)}</span></div>
           <div className="flex justify-between text-sm py-0.5"><span>Cadastros a atualizar</span><span className="tabular">{fmtInt(stats.with_updates)}</span></div>
           <div className="flex justify-between text-sm py-0.5"><span>Pessoas repetidas no arquivo</span><span className="tabular">{fmtInt(stats.in_file_dups)}</span></div>
+          <div className="flex justify-between text-sm py-0.5"><span>Oportunidades a atualizar</span><span className="tabular">{fmtInt(stats.opp_updates_selected || 0)}</span></div>
           <div className="flex justify-between text-sm py-0.5"><span>Linhas que serão ignoradas</span><span className="tabular">{fmtInt(stats.skipped)}</span></div>
         </Card>
       </div>
@@ -308,6 +312,18 @@ function Validation({ id, stats, products, busy, onBack, onCommit, onRemapProduc
             <Button onClick={() => onRemapProducts(pvMap)} loading={busy}>Aplicar e reanalisar</Button>
           </div>
         </Card>
+      )}
+
+      {stats.opp_updates > 0 && (
+        <Alert tone="info" title={`${stats.opp_updates} oportunidade(s) já importada(s) com informação nova`}>
+          São os mesmos leads (mesmo contato, produto e data de entrada) que mudaram na planilha, por exemplo de “Aberto” para “Perdido”.
+          Ao confirmar, a oportunidade existente é atualizada e a mudança fica registrada na ficha do contato. Campanhas, envios e conversões não são alterados.
+          <div className="flex flex-wrap gap-2 mt-2">
+            <Button size="sm" onClick={() => { setFilter('situacao'); setPage(1); }}>Ver as alterações</Button>
+            <Button size="sm" onClick={() => bulk('atualizacoes', 'auto')}>Atualizar todas</Button>
+            <Button size="sm" variant="ghost" onClick={() => bulk('atualizacoes', 'ignorar')}>Manter todas como estão</Button>
+          </div>
+        </Alert>
       )}
 
       {stats.ambiguous_pending > 0 && (
@@ -334,7 +350,12 @@ function Validation({ id, stats, products, busy, onBack, onCommit, onRemapProduc
                   <td className="px-2 py-2"><HistBadge status={r.historical_status} /></td>
                   <td className="px-2 py-2 min-w-44">
                     <Badge className={MATCH[r.match_type][1]}>{MATCH[r.match_type][0]}</Badge>
-                    {r.dup_opportunity_id && <p className="text-[12px] text-amber-800 mt-1">Oportunidade idêntica já importada</p>}
+                    {r.opp_changes?.length > 0 ? (
+                      <div className="mt-1.5 rounded-lg bg-sky-50 px-2 py-1.5 text-[12px] text-sky-800">
+                        <p className="font-semibold">Atualização da oportunidade</p>
+                        {r.opp_changes.map((c, i) => <p key={i}>{c.label}: {c.field === 'historical_status' ? c.from : showVal(c, c.from)} → <b>{c.field === 'historical_status' ? c.to : showVal(c, c.to)}</b></p>)}
+                      </div>
+                    ) : r.dup_opportunity_id ? <p className="text-[12px] text-amber-800 mt-1">Oportunidade idêntica já importada</p> : null}
                     {r.candidates.map((c) => <p key={c.id} className="text-[12px] text-muted mt-1">↔ <Link to={`/contatos/${c.id}`} className="underline">{c.full_name}</Link> ({c.by.join(' e ')})</p>)}
                     {r.changes.map((c, i) => <p key={i} className="text-[12px] text-sky-800 mt-1">{c.label}: {c.from || '(vazio)'} → {c.to}</p>)}
                   </td>
@@ -342,10 +363,20 @@ function Validation({ id, stats, products, busy, onBack, onCommit, onRemapProduc
                   <td className="px-4 py-2 min-w-48">
                     <Select className="!h-8 text-[13px]" value={r.decision === 'vincular' ? `v${r.decision_contact_id}` : r.decision}
                       onChange={(e) => { const v = e.target.value; if (v.startsWith('v')) decide(r, 'vincular', Number(v.slice(1))); else decide(r, v); }}>
-                      <option value="auto">{r.match_type === 'ambiguo' ? '— decidir —' : r.match_type === 'existente' ? 'Vincular ao existente' : 'Criar contato'}</option>
-                      {r.match_type !== 'novo' && r.match_type !== 'interno' && <option value="criar">Criar contato novo</option>}
-                      {r.candidates.map((c) => <option key={c.id} value={`v${c.id}`}>Vincular a {c.full_name}</option>)}
-                      <option value="ignorar">Ignorar linha</option>
+                      {r.opp_changes?.length > 0 ? (
+                        <>
+                          <option value="auto">Atualizar oportunidade</option>
+                          <option value="nova_oportunidade">Importar como nova oportunidade</option>
+                          <option value="ignorar">Manter como está</option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="auto">{r.match_type === 'ambiguo' ? '— decidir —' : r.match_type === 'existente' ? 'Vincular ao existente' : 'Criar contato'}</option>
+                          {r.match_type !== 'novo' && r.match_type !== 'interno' && <option value="criar">Criar contato novo</option>}
+                          {r.candidates.map((c) => <option key={c.id} value={`v${c.id}`}>Vincular a {c.full_name}</option>)}
+                          <option value="ignorar">Ignorar linha</option>
+                        </>
+                      )}
                     </Select>
                   </td>
                 </tr>

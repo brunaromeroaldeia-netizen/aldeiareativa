@@ -214,6 +214,30 @@ export function mapRow(row, sheet, products) {
   };
 }
 
+const HIST_NAMES = { ganho: 'Ganho', perdido: 'Perdido', aberto: 'Aberto', revisao: 'Revisão necessária' };
+
+/**
+ * Compara a mesma oportunidade (mesmo contato, produto e data de entrada) já existente com a linha nova.
+ * Datas e dados só são acrescentados ou substituídos por valores preenchidos; a situação é recalculada
+ * com as datas combinadas, evitando "regredir" um registro por causa de uma planilha incompleta.
+ */
+export function oppChanges(o, m) {
+  const won = m.won_date || o.won_date;
+  const lost = m.lost_date || o.lost_date;
+  let status;
+  let reasons = [];
+  if (m.historical_status === 'revisao') { status = 'revisao'; reasons = m.review_reasons || []; }
+  else if (won && lost) { status = 'revisao'; reasons = ['Data do ganho e data da perda preenchidas']; }
+  else status = won ? 'ganho' : lost ? 'perdido' : 'aberto';
+  const ch = [];
+  if (status !== o.historical_status) ch.push({ field: 'historical_status', label: 'Situação', from: HIST_NAMES[o.historical_status] || o.historical_status, to: HIST_NAMES[status], value: status, reasons });
+  if (m.won_date && m.won_date !== o.won_date) ch.push({ field: 'won_date', label: 'Data do ganho', from: o.won_date, to: m.won_date });
+  if (m.lost_date && m.lost_date !== o.lost_date) ch.push({ field: 'lost_date', label: 'Data da perda', from: o.lost_date, to: m.lost_date });
+  if (m.lost_reason && m.lost_reason !== o.lost_reason) ch.push({ field: 'lost_reason', label: 'Motivo da perda', from: o.lost_reason, to: m.lost_reason });
+  if (m.value !== null && m.value !== undefined && Number(m.value) !== Number(o.value)) ch.push({ field: 'value', label: 'Valor', from: o.value, to: m.value });
+  return ch;
+}
+
 const CONTACT_FIELDS = [
   { key: 'full_name', label: 'Nome' }, { key: 'company', label: 'Empresa' },
   { key: 'phone', label: 'Telefone', norm: 'phone_norm' }, { key: 'email', label: 'E-mail', norm: 'email_norm' },
@@ -279,7 +303,7 @@ export async function analyzeImport(importId) {
     if (c.email_norm) byEmail.set(c.email_norm, [...(byEmail.get(c.email_norm) || []), c]);
   }
   const contactIds = existing.map((c) => c.id);
-  const existingOpps = contactIds.length ? await many(`SELECT id, contact_id, product_id, created_date, won_date, lost_date, ref_year, historical_status
+  const existingOpps = contactIds.length ? await many(`SELECT id, contact_id, product_id, created_date, won_date, lost_date, ref_year, historical_status, lost_reason, value, status_manual
      FROM opportunities WHERE contact_id = ANY($1)`, [contactIds]) : [];
 
   // agrupamento interno (mesma pessoa repetida no arquivo) via union-find
@@ -304,6 +328,7 @@ export async function analyzeImport(importId) {
     p.candidates = [...cands.values()].map((c) => ({ id: c.id, full_name: c.full_name, company: c.company, phone: c.phone, email: c.email, by: reasons[c.id] }));
     p.group_key = `g${find(i)}`;
     p.dup_opportunity_id = null;
+    p.opp_changes = [];
     p.changes = [];
     if (cands.size === 0) {
       p.match_type = groupSize.get(find(i)) > 1 ? 'interno' : 'novo';
@@ -319,7 +344,15 @@ export async function analyzeImport(importId) {
         const dup = existingOpps.find((o) => o.contact_id === c.id && o.product_id === mp.product_id &&
           ((mp.created_date && o.created_date === mp.created_date) ||
            (!mp.created_date && o.ref_year === mp.ref_year && o.historical_status === mp.historical_status && o.won_date === mp.won_date && o.lost_date === mp.lost_date)));
-        if (dup) p.dup_opportunity_id = dup.id;
+        if (dup) {
+          p.dup_opportunity_id = dup.id;
+          // mesma oportunidade com informação nova (ex.: aberto -> perdido): vira atualização, não duplicidade
+          if (mp.created_date && dup.created_date === mp.created_date) p.opp_changes = oppChanges(dup, mp);
+          if (p.opp_changes.length) {
+            mp.issues.push({ level: 'info', msg: 'Oportunidade já importada com informação nova: será atualizada' });
+            if (dup.status_manual && p.opp_changes.some((x) => x.field === 'historical_status')) mp.issues.push({ level: 'aviso', msg: 'A situação desta oportunidade tinha sido ajustada manualmente' });
+          }
+        }
         p.changes = computeChanges(c, mp, imp.update_rule);
         if (c.do_not_contact) mp.issues.push({ level: 'info', msg: 'Contato existente com bloqueio de comunicação (opt-out)' });
       }
@@ -341,15 +374,16 @@ export async function analyzeImport(importId) {
       const vals = [];
       const params = [];
       part.forEach((p, j) => {
-        const b = j * 16;
-        vals.push(`(${Array.from({ length: 16 }, (_, k) => `$${b + k + 1}`).join(',')})`);
-        const decision = p.dup_opportunity_id || p.dup_in_file ? 'ignorar' : 'auto';
+        const b = j * 17;
+        vals.push(`(${Array.from({ length: 17 }, (_, k) => `$${b + k + 1}`).join(',')})`);
+        const plainDup = p.dup_opportunity_id && !p.opp_changes.length;
+        const decision = plainDup || p.dup_in_file ? 'ignorar' : 'auto';
         params.push(importId, p.sheet, p.row_number, p.raw, p.mapped, JSON.stringify(p.mapped.issues), p.mapped.historical_status,
           p.mapped.ref_year, p.mapped.year_source, p.mapped.product_id, p.match_type, p.match_contact_id,
-          JSON.stringify(p.candidates), p.group_key, p.dup_opportunity_id, JSON.stringify({ changes: p.changes, decision }));
+          JSON.stringify(p.candidates), p.group_key, p.dup_opportunity_id, JSON.stringify({ changes: p.changes, decision }), JSON.stringify(p.opp_changes));
       });
       await c.query(`INSERT INTO import_rows(import_id, sheet_name, row_number, raw, mapped, issues, historical_status, ref_year, year_source,
-          product_id, match_type, match_contact_id, candidates, group_key, dup_opportunity_id, changes) VALUES ${vals.join(',')}`, params);
+          product_id, match_type, match_contact_id, candidates, group_key, dup_opportunity_id, changes, opp_changes) VALUES ${vals.join(',')}`, params);
     }
     // o campo changes recebeu {changes, decision} temporariamente: separa
     await c.query(`UPDATE import_rows SET decision = changes->>'decision', changes = changes->'changes' WHERE import_id=$1`, [importId]);
@@ -373,7 +407,9 @@ export async function importStats(importId) {
       count(*) FILTER (WHERE match_type='existente')::int AS existing,
       count(*) FILTER (WHERE match_type='ambiguo')::int AS ambiguous,
       count(*) FILTER (WHERE match_type='ambiguo' AND decision='auto')::int AS ambiguous_pending,
-      count(*) FILTER (WHERE dup_opportunity_id IS NOT NULL)::int AS dup_opportunities,
+      count(*) FILTER (WHERE dup_opportunity_id IS NOT NULL AND jsonb_array_length(opp_changes) = 0)::int AS dup_opportunities,
+      count(*) FILTER (WHERE jsonb_array_length(opp_changes) > 0)::int AS opp_updates,
+      count(*) FILTER (WHERE jsonb_array_length(opp_changes) > 0 AND decision = 'auto')::int AS opp_updates_selected,
       count(*) FILTER (WHERE decision='ignorar')::int AS skipped,
       count(*) FILTER (WHERE jsonb_array_length(changes) > 0)::int AS with_updates,
       count(*) FILTER (WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(issues) x WHERE x->>'level' IN ('erro','revisao','aviso') AND x->>'msg' NOT IN ('Sem telefone')))::int AS with_issues,
@@ -404,7 +440,7 @@ export async function commitImport(importId, user, { isDemo = false } = {}) {
 
     const groupContact = new Map();
     const updatedContacts = new Set();
-    const res = { contactsCreated: 0, contactsUpdated: 0, contactsLinked: 0, opportunitiesCreated: 0, rowsSkipped: 0 };
+    const res = { contactsCreated: 0, contactsUpdated: 0, contactsLinked: 0, opportunitiesCreated: 0, opportunitiesUpdated: 0, rowsSkipped: 0 };
 
     const createContact = async (m) => {
       const ins = await c.query(`INSERT INTO contacts(full_name, first_name, company, phone, phone_norm, email, email_norm, notes, source, is_demo, created_by, extra)
@@ -447,6 +483,30 @@ export async function commitImport(importId, user, { isDemo = false } = {}) {
           res.contactsUpdated++;
         }
         updatedContacts.add(contactId);
+      }
+
+      // atualização de oportunidade já existente (nunca apaga: preenche/substitui com dados novos e guarda o histórico)
+      if (r.dup_opportunity_id && (r.opp_changes || []).length && r.decision === 'auto') {
+        const cur = (await c.query('SELECT * FROM opportunities WHERE id=$1 FOR UPDATE', [r.dup_opportunity_id])).rows[0];
+        const ch = cur ? oppChanges(cur, m) : [];
+        if (ch.length) {
+          const st = ch.find((x) => x.field === 'historical_status');
+          await c.query(`UPDATE opportunities SET
+              won_date = COALESCE($2, won_date), lost_date = COALESCE($3, lost_date), lost_reason = COALESCE($4, lost_reason),
+              value = COALESCE($5, value), status_column = COALESCE($6, status_column),
+              historical_status = COALESCE($7, historical_status),
+              review_reasons = CASE WHEN $7::text IS NULL THEN review_reasons ELSE $8::jsonb END,
+              status_manual = CASE WHEN $7::text IS NULL THEN status_manual ELSE FALSE END,
+              updated_at = now()
+            WHERE id = $1`,
+          [cur.id, m.won_date, m.lost_date, m.lost_reason, m.value, m.status_column, st ? st.value : null, JSON.stringify(st ? st.reasons : [])]);
+          await c.query('INSERT INTO opportunity_history(opportunity_id, import_id, user_id, changes) VALUES ($1,$2,$3,$4)', [cur.id, importId, user.id, JSON.stringify(ch)]);
+          await c.query(`INSERT INTO audit_log(user_id, action, entity, entity_id, details) VALUES ($1,'oportunidade_atualizada_importacao','opportunity',$2,$3)`,
+            [user.id, cur.id, { import_id: importId, changes: ch }]);
+          res.opportunitiesUpdated++;
+        } else res.rowsSkipped++;
+        await c.query('UPDATE import_rows SET result_contact_id=$2, result_opportunity_id=$3 WHERE id=$1', [r.id, contactId, r.dup_opportunity_id]);
+        continue;
       }
 
       const opp = await c.query(`INSERT INTO opportunities(contact_id, product_id, import_id, source_sheet, source_row, title, created_date, won_date, lost_date,

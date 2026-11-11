@@ -22,6 +22,7 @@ const STEPS = [
       ['Conferir o mapeamento das colunas e o produto/ano de cada aba', '/importacoes'],
       ['Na validação: conferir ganhos, perdidos, abertos, revisão, sem telefone e duplicidades', '/importacoes'],
       ['Confirmar e encontrar os novos contatos na Base de Contatos', '/contatos'],
+      ['Importar de novo com um lead que mudou de situação (ex.: aberto → perdido) e ver “Atualização de situação” na prévia', '/importacoes'],
     ],
   },
   {
