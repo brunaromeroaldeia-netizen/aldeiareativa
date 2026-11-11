@@ -168,6 +168,8 @@ function DataTab() {
             <Button variant="danger" icon={Trash2} loading={busy === 'rm'} onClick={async () => {
               if (await confirm({ title: 'Remover dados de demonstração', message: 'Remove todos os contatos, campanhas, envios e importações de exemplo. Dados reais não são afetados.', danger: true, confirmLabel: 'Remover' })) run('rm', () => api.del('/admin/demo'), 'Dados de demonstração removidos');
             }}>Remover dados de demonstração</Button>
+          ) : demo?.allowLoad === false ? (
+            <p className="text-[12.5px] text-muted">No site oficial a base começa vazia; dados de demonstração ficam desativados.</p>
           ) : (
             <Button icon={FlaskConical} loading={busy === 'load'} onClick={() => run('load', () => api.post('/admin/demo'), 'Dados de demonstração carregados')}>Carregar dados de demonstração</Button>
           )}

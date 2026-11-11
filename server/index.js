@@ -9,6 +9,7 @@ import { migrate } from './migrate.js';
 import { loadUser, requireAuth, requireAdmin } from './auth.js';
 import { HttpError } from './lib/http.js';
 import { startScheduler, runScheduler } from './services/scheduler.js';
+import { ensureBlackFridayCampaign } from './services/blackFriday.js';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import productRoutes from './routes/products.js';
@@ -93,6 +94,8 @@ export async function createApp() {
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)) {
   fs.mkdirSync(config.uploadDir, { recursive: true });
   await migrate();
+  const bf = await ensureBlackFridayCampaign().catch((e) => { console.error('[inicial] campanha Black Friday', e.message); return null; });
+  if (bf) console.log(`[inicial] campanha Black Friday de Mesa ${bf.created ? 'criada' : 'configurada'} (id ${bf.campaign_id})`);
   const app = await createApp();
   app.listen(config.port, () => console.log(`Aldeia Reativa rodando em http://localhost:${config.port} (${config.env})`));
   if (process.env.DISABLE_SCHEDULER !== '1') startScheduler(10);

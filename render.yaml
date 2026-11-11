@@ -1,0 +1,30 @@
+# Blueprint da Render: cria o site (Docker) e o banco PostgreSQL gerenciado.
+# Na Render: New › Blueprint › escolha este repositório › Apply.
+databases:
+  - name: aldeia-reativa-db
+    databaseName: aldeia_reativa
+    user: aldeia
+    plan: basic-256mb        # banco pago: não expira e tem backup diário automático
+    region: virginia
+    postgresMajorVersion: "15"
+
+services:
+  - type: web
+    name: aldeia-reativa
+    runtime: docker
+    plan: starter            # sempre ligado (follow-ups e filas atualizados o tempo todo)
+    region: virginia
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: aldeia-reativa-db
+          property: connectionString
+      - key: SETUP_CODE        # código pedido no primeiro acesso (veja em Environment)
+        generateValue: true
+      - key: APP_TIMEZONE
+        value: America/Sao_Paulo
+      - key: ALLOW_DEMO
+        value: "false"

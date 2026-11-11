@@ -129,3 +129,13 @@ Pacote com 5 modelos (3 iniciais por status histórico, 2 follow-ups), condiçõ
 - Versão oficial: depois de criar a campanha, rode `npm run pacote:black-friday` (ou `npm run pacote:black-friday -- <id da campanha>`).
 - `{{vendedora}}` é a vendedora responsável pelo contato. Sem responsável, a cópia e o envio ficam bloqueados até a atribuição.
 - O modelo de ex-clientes só é sugerido quando a ficha do contato está marcada como “Ex-cliente (não é mais cliente)”. Clientes ativos não entram na campanha e não recebem mensagem automática.
+
+## Publicar o site oficial (Render)
+
+1. Suba este repositório para um repositório **privado** no GitHub.
+2. Na Render (render.com): **New › Blueprint**, escolha o repositório e clique em **Apply**. O arquivo `render.yaml` cria o site (Docker) e o banco PostgreSQL com backup diário.
+3. Quando terminar, abra o endereço do site (`https://aldeia-reativa….onrender.com`). Aparece **Primeiro acesso**: crie a conta da administradora. O **código de instalação** está na Render, em *aldeia-reativa › Environment › SETUP_CODE*.
+4. Em **Configurações › Usuárias › Nova usuária**, cadastre Letícia e Giovana. Cada uma recebe um link para criar a própria senha (válido por 2 horas).
+5. Em **Importações**, envie a planilha de leads. A campanha *Black Friday — Mesa / Plano Full — Aldeia Cândido* já existe como rascunho, com modelos, condições e regras: adicione os contatos, escolha as vendedoras e ative.
+
+O site começa com a base vazia: sem contatos, sem dados de demonstração (desativados em produção) e sem usuárias até o primeiro acesso.

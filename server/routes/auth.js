@@ -42,6 +42,33 @@ r.post('/logout', ah(async (req, res) => {
 
 r.get('/me', (req, res) => res.json({ user: req.user || null }));
 
+/** Primeiro acesso: enquanto não existe nenhuma usuária, o site permite criar a conta da administradora. */
+r.get('/setup', ah(async (_req, res) => {
+  const { n } = await one('SELECT count(*)::int AS n FROM users');
+  res.json({ needsSetup: n === 0, codeRequired: !!config.setupCode || config.isProd });
+}));
+
+r.post('/setup', limiter, ah(async (req, res) => {
+  const d = parse(z.object({
+    name: z.string().trim().min(2).max(80), email: z.string().trim().toLowerCase().email(),
+    password: z.string(), code: z.string().trim().optional(),
+  }), req.body);
+  if (config.isProd && !config.setupCode) throw bad('Instalação bloqueada: defina a variável SETUP_CODE no servidor.');
+  if (config.setupCode && d.code !== config.setupCode) throw new HttpError(403, 'Código de instalação incorreto.');
+  const err = validatePasswordStrength(d.password);
+  if (err) throw bad(err);
+  const user = await tx(async (c) => {
+    await c.query('LOCK TABLE users IN EXCLUSIVE MODE');
+    const { n } = (await c.query('SELECT count(*)::int AS n FROM users')).rows[0];
+    if (n > 0) throw bad('O primeiro acesso já foi feito. Entre com seu e-mail e senha.');
+    return (await c.query(`INSERT INTO users(name, email, role, password_hash, must_change_password) VALUES ($1,$2,'admin',$3,FALSE) RETURNING *`,
+      [d.name, d.email, await hashPassword(d.password)])).rows[0];
+  });
+  await createSession(res, user, req);
+  await audit({ ip: req.ip, user }, 'primeiro_acesso_administradora', 'user', user.id);
+  res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role, mustChangePassword: false } });
+}));
+
 r.post('/change-password', requireAuth, ah(async (req, res) => {
   const { currentPassword, newPassword } = parse(z.object({ currentPassword: z.string(), newPassword: z.string() }), req.body);
   const user = await one('SELECT * FROM users WHERE id=$1', [req.user.id]);

@@ -11,7 +11,10 @@ export const config = {
   port: Number(process.env.PORT || 3000),
   databaseUrl: process.env.DATABASE_URL || 'postgres://aldeia:devpass@localhost:5432/aldeia_reativa',
   databaseSsl: process.env.DATABASE_SSL === 'true',
-  appUrl: process.env.APP_URL || `http://localhost:${process.env.PORT || 3000}`,
+  // na Render, RENDER_EXTERNAL_URL é preenchida automaticamente com o endereço público do site
+  appUrl: process.env.APP_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 3000}`,
+  setupCode: process.env.SETUP_CODE || null,
+  allowDemo: process.env.ALLOW_DEMO ? process.env.ALLOW_DEMO === 'true' : process.env.NODE_ENV !== 'production',
   uploadDir: process.env.UPLOAD_DIR || path.join(root, 'uploads'),
   backupDir: process.env.BACKUP_DIR || path.join(root, 'backups'),
   maxUploadMb: Number(process.env.MAX_UPLOAD_MB || 20),

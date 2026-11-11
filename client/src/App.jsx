@@ -9,7 +9,9 @@ import './styles.css';
 import { AuthProvider, ProductProvider, useAuth } from './lib/context.jsx';
 import { ToastProvider, Loading } from './components/ui.jsx';
 import Layout from './components/Layout.jsx';
-import { Login, ForgotPassword, ResetPassword, ChangePassword } from './pages/Auth.jsx';
+import { Login, ForgotPassword, ResetPassword, ChangePassword, FirstAccess } from './pages/Auth.jsx';
+import { useQuery } from '@tanstack/react-query';
+import { api } from './lib/api.js';
 import Overview from './pages/Overview.jsx';
 import Operation from './pages/Operation.jsx';
 import { Products, ProductDetail } from './pages/Products.jsx';
@@ -31,7 +33,9 @@ const queryClient = new QueryClient({
 
 function AppRoutes({ extraRoutes }) {
   const { user, loading, isAdmin } = useAuth();
+  const { data: setup } = useQuery({ queryKey: ['setup'], queryFn: () => api.get('/auth/setup'), enabled: !loading && !user, staleTime: 0 });
   if (loading) return <Loading />;
+  if (!user && setup?.needsSetup) return <FirstAccess codeRequired={setup.codeRequired} />;
   if (!user) {
     return (
       <Routes>

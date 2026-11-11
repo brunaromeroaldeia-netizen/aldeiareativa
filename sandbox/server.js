@@ -6,6 +6,7 @@ import { files } from './shims/fs.js';
 import migrationSql from '../server/migrations/001_init.sql?raw';
 import migration002 from '../server/migrations/002_atualizacao_oportunidades.sql?raw';
 import migration003 from '../server/migrations/003_sequencia_e_situacao_cliente.sql?raw';
+import migration004 from '../server/migrations/004_producao.sql?raw';
 import { runBlackFridayUpdate } from '../server/services/blackFriday.js';
 import { Router } from './shims/express.js';
 import { loadUser, requireAuth, requireAdmin, hashPassword, COOKIE } from '../server/auth.js';
@@ -48,6 +49,7 @@ async function seed(progress) {
   await db.exec(sql);
   await db.exec(migration002);
   await db.exec(migration003);
+  await db.exec(migration004);
   progress?.('Criando usuárias de teste…');
   for (const u of TEST_USERS) {
     await query('INSERT INTO users(name, email, role, password_hash, must_change_password) VALUES ($1,$2,$3,$4,FALSE)', [u.name, u.email, u.role, await hashPassword(u.password)]);
@@ -84,6 +86,7 @@ export async function boot(progress) {
     progress?.('Aplicando atualizações…');
     await db.exec(migration002);
     await db.exec(migration003);
+    await db.exec(migration004);
   }
   try {
     const bf = await runBlackFridayUpdate();

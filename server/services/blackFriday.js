@@ -194,3 +194,26 @@ export async function runBlackFridayUpdate() {
     return results;
   });
 }
+
+export const BF_INITIAL = 'campanha-inicial-black-friday-mesa-2026';
+
+/**
+ * Site oficial: garante que a campanha Black Friday de Mesa exista (rascunho, sem contatos),
+ * com modelos, condições e regras. Executada uma única vez; nunca cria contatos nem dados de exemplo.
+ */
+export async function ensureBlackFridayCampaign() {
+  return tx(async (c) => {
+    if ((await c.query('SELECT 1 FROM data_updates WHERE name=$1', [BF_INITIAL])).rows.length) return null;
+    let camp = (await findBlackFridayCampaigns(c))[0];
+    let created = false;
+    if (!camp) {
+      const mesa = await mesaProductId(c);
+      if (!mesa) return null;
+      camp = (await c.query(`INSERT INTO campaigns(name, status, start_date, end_date, product_ids) VALUES ($1,'rascunho','2026-11-01',$2,$3) RETURNING *`, [BF_NAME, BF_END, [mesa]])).rows[0];
+      created = true;
+    }
+    const report = await applyBlackFridayPackage(c, camp.id, null);
+    await c.query('INSERT INTO data_updates(name, details) VALUES ($1,$2) ON CONFLICT (name) DO NOTHING', [BF_INITIAL, JSON.stringify({ campaign_id: camp.id, created, report })]);
+    return { campaign_id: camp.id, created };
+  });
+}

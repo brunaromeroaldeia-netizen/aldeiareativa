@@ -11,12 +11,13 @@ import { today } from '../lib/dates.js';
 const r = Router();
 
 r.get('/demo', ah(async (_req, res) => {
-  res.json(await one(`SELECT (SELECT count(*) FROM contacts WHERE is_demo)::int AS contacts,
+  res.json(await one(`SELECT $1::boolean AS "allowLoad", (SELECT count(*) FROM contacts WHERE is_demo)::int AS contacts,
     (SELECT count(*) FROM opportunities WHERE is_demo)::int AS opportunities,
-    (SELECT count(*) FROM campaigns WHERE is_demo)::int AS campaigns`));
+    (SELECT count(*) FROM campaigns WHERE is_demo)::int AS campaigns`, [config.allowDemo]));
 }));
 
 r.post('/demo', ah(async (req, res) => {
+  if (!config.allowDemo) throw bad('Dados de demonstração desativados no site oficial.');
   try { res.json(await loadDemo(req.user.id)); } catch (e) { throw bad(e.message); }
 }));
 

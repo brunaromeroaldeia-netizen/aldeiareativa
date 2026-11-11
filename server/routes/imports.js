@@ -36,17 +36,16 @@ r.post('/', upload.single('file'), ah(async (req, res) => {
   const sheets = parseWorkbook(req.file.buffer, req.file.originalname);
   const hash = crypto.createHash('sha256').update(req.file.buffer).digest('hex');
   const previous = await one(`SELECT id, created_at FROM imports WHERE file_hash=$1 AND status='concluida' ORDER BY id DESC LIMIT 1`, [hash]);
-  fs.mkdirSync(config.uploadDir, { recursive: true });
   const safeName = req.file.originalname.replace(/[^\w.\- ]+/g, '_').slice(-120);
   const stored = `${Date.now()}-${hash.slice(0, 10)}-${safeName}`;
-  fs.writeFileSync(path.join(config.uploadDir, stored), req.file.buffer, { mode: 0o600 });
   const products = await many('SELECT id, name, aliases FROM products WHERE active');
   const fileYear = detectYear(req.file.originalname);
   const fileProduct = matchProduct(req.file.originalname.replace(/\.\w+$/, ''), products);
 
   const id = await tx(async (c) => {
-    const imp = (await c.query(`INSERT INTO imports(filename, stored_path, file_hash, file_size, created_by) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
-      [req.file.originalname, stored, hash, req.file.size, req.user.id])).rows[0];
+    // o arquivo original fica guardado no banco (consultável depois, sobrevive a atualizações do site)
+    const imp = (await c.query(`INSERT INTO imports(filename, stored_path, file_hash, file_size, created_by, file_data) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+      [req.file.originalname, stored, hash, req.file.size, req.user.id, Buffer.from(req.file.buffer)])).rows[0];
     for (const s of sheets) {
       await c.query(`INSERT INTO import_sheets(import_id, name, position, headers, rows, row_numbers, include, mapping, default_product_id, default_year)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
@@ -60,7 +59,8 @@ r.post('/', upload.single('file'), ah(async (req, res) => {
 }));
 
 async function loadImport(id) {
-  const imp = await one(`SELECT i.*, u.name AS created_by_name FROM imports i LEFT JOIN users u ON u.id=i.created_by WHERE i.id=$1`, [id]);
+  const imp = await one(`SELECT i.id, i.filename, i.stored_path, i.file_hash, i.file_size, i.status, i.update_rule, i.stats, i.is_demo, i.created_by, i.created_at,
+      i.committed_at, i.committed_by, (i.file_data IS NOT NULL) AS has_file, u.name AS created_by_name FROM imports i LEFT JOIN users u ON u.id=i.created_by WHERE i.id=$1`, [id]);
   if (!imp) throw notFound('Importação não encontrada.');
   const sheets = await many(`SELECT id, name, position, headers, include, mapping, default_product_id, default_year, product_value_map,
       jsonb_array_length(rows) AS row_count, (SELECT jsonb_agg(x) FROM (SELECT x FROM jsonb_array_elements(rows) x LIMIT 6) t) AS sample
@@ -166,13 +166,20 @@ r.delete('/:id', ah(async (req, res) => {
   await query(`UPDATE imports SET status='cancelada' WHERE id=$1`, [id]);
   await query('DELETE FROM import_rows WHERE import_id=$1', [id]);
   await query(`UPDATE import_sheets SET rows='[]' WHERE import_id=$1`, [id]);
+  await query(`UPDATE imports SET file_data=NULL WHERE id=$1`, [id]);
   if (imp.stored_path) fs.rm(path.join(config.uploadDir, imp.stored_path), { force: true }, () => {});
   await audit(req, 'importacao_cancelada', 'import', id);
   res.json({ ok: true });
 }));
 
 r.get('/:id/file', ah(async (req, res) => {
-  const imp = await one('SELECT filename, stored_path FROM imports WHERE id=$1', [intParam(req.params.id)]);
+  const imp = await one('SELECT filename, stored_path, file_data FROM imports WHERE id=$1', [intParam(req.params.id)]);
+  if (imp?.file_data) {
+    await audit(req, 'arquivo_importacao_baixado', 'import', Number(req.params.id));
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(imp.filename)}"`);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    return res.send(imp.file_data);
+  }
   if (!imp?.stored_path) throw notFound('Arquivo de origem indisponível.');
   const file = path.join(config.uploadDir, path.basename(imp.stored_path));
   if (!fs.existsSync(file)) throw notFound('Arquivo de origem indisponível.');

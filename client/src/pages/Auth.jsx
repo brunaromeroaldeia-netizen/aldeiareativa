@@ -152,3 +152,31 @@ export function ChangePassword({ forced }) {
     </Shell>
   );
 }
+
+/** Primeiro acesso ao site: cria a conta da administradora (só aparece enquanto não existe nenhuma usuária). */
+export function FirstAccess({ codeRequired }) {
+  const { refresh } = useAuth();
+  const [f, setF] = useState({ name: '', email: '', password: '', password2: '', code: '' });
+  const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
+  const submit = async (e) => {
+    e.preventDefault(); setErr('');
+    if (f.password !== f.password2) return setErr('As senhas não conferem.');
+    setLoading(true);
+    try { await api.post('/auth/setup', { name: f.name, email: f.email, password: f.password, code: f.code || undefined }); await refresh(); } catch (e2) { setErr(e2.message); } finally { setLoading(false); }
+  };
+  const up = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  return (
+    <Shell title="Primeiro acesso" subtitle="Crie a conta da administradora. Depois, convide a equipe em Configurações › Usuárias.">
+      <form onSubmit={submit} className="space-y-4">
+        <Field label="Seu nome"><Input value={f.name} onChange={up('name')} required autoFocus /></Field>
+        <Field label="E-mail (será o seu login)"><Input type="email" autoComplete="username" value={f.email} onChange={up('email')} required /></Field>
+        <Field label="Senha" hint={rules}><Input type="password" autoComplete="new-password" value={f.password} onChange={up('password')} required /></Field>
+        <Field label="Confirmar senha"><Input type="password" autoComplete="new-password" value={f.password2} onChange={up('password2')} required /></Field>
+        {codeRequired && <Field label="Código de instalação" hint="Fica nas configurações do servidor (variável SETUP_CODE)."><Input value={f.code} onChange={up('code')} required /></Field>}
+        {err && <Alert tone="danger">{err}</Alert>}
+        <Button variant="primary" className="w-full" size="lg" loading={loading}>Criar conta e entrar</Button>
+      </form>
+    </Shell>
+  );
+}
