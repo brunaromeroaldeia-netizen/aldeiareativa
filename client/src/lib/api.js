@@ -50,6 +50,7 @@ export async function download(url) {
   const blob = await res.blob();
   const cd = res.headers.get('content-disposition') || '';
   const name = decodeURIComponent((cd.match(/filename="?([^"]+)"?/) || [])[1] || 'arquivo');
+  if (window.__aldeiaSave) return window.__aldeiaSave(blob, name); // versão de testes publicada
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = name;

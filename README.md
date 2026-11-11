@@ -108,3 +108,15 @@ Em “Esqueci minha senha”: com SMTP configurado, a usuária recebe um link de
 ## Observação sobre a biblioteca de planilhas
 O pacote `xlsx` do npm (0.18.5) é a última versão publicada no registro público. Como só a administradora importa arquivos, o risco é baixo, mas recomenda-se trocar pela versão oficial mais recente no deploy:
 `npm i https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz`.
+
+## Versão de testes (navegador)
+
+Uma versão de testes **separada** da produção roda inteiramente no navegador: o mesmo frontend e as mesmas rotas e regras do backend (`server/routes`, `server/services`) executam sobre um PostgreSQL compilado para o navegador (PGlite). Não há servidor, envio de mensagens nem integração com CowPilot/CRM.
+
+```bash
+npm run build:teste    # gera dist-teste/ (página única + arquivos do banco)
+```
+
+- Código exclusivo do teste: `sandbox/` (adaptadores do Node para o navegador, usuárias de teste, guia de testes) e `vite.sandbox.config.js`. Nada disso entra no build de produção (`npm run build` → `dist/`).
+- Usuárias de teste (só existem nesta versão): `admin@aldeia.teste`, `leticia@aldeia.teste`, `giovana@aldeia.teste`.
+- Os dados ficam no navegador de quem testa (IndexedDB). “Reiniciar ambiente de testes” recria a base de demonstração.

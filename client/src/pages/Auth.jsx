@@ -31,11 +31,12 @@ export function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const submit = async (e) => {
-    e.preventDefault();
+  const doLogin = async (em, pw) => {
     setError(''); setLoading(true);
-    try { await api.post('/auth/login', { email, password }); await refresh(); } catch (err) { setError(err.message); } finally { setLoading(false); }
+    try { await api.post('/auth/login', { email: em, password: pw }); await refresh(); } catch (err) { setError(err.message); } finally { setLoading(false); }
   };
+  const submit = (e) => { e.preventDefault(); doLogin(email, password); };
+  const testUsers = window.__ALDEIA_TESTE__?.users;
   return (
     <Shell title="Entrar" subtitle="Acesse com seu e-mail e senha.">
       <form onSubmit={submit} className="space-y-4">
@@ -45,6 +46,20 @@ export function Login() {
         <Button variant="primary" className="w-full" size="lg" loading={loading}>Entrar</Button>
         <p className="text-center text-sm"><Link to="/esqueci-senha" className="text-brand-700 hover:underline">Esqueci minha senha</Link></p>
       </form>
+      {testUsers && (
+        <div className="mt-6 pt-5 border-t border-line">
+          <p className="text-[12px] font-semibold uppercase tracking-wide text-amber-700">Versão de testes · entrar como</p>
+          <div className="mt-2 grid gap-2">
+            {testUsers.map((u) => (
+              <button key={u.email} type="button" disabled={loading} onClick={() => { setEmail(u.email); setPassword(u.password); doLogin(u.email, u.password); }}
+                className="text-left rounded-lg ring-1 ring-line px-3 py-2 hover:bg-stone-50 disabled:opacity-50">
+                <span className="text-sm font-medium block">{u.label}</span>
+                <span className="text-[12px] text-muted">{u.email} · {u.password}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </Shell>
   );
 }

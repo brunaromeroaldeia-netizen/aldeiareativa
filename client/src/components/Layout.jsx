@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
-  LayoutGrid, Send, Package, Megaphone, Users, CalendarClock, BarChart3, Upload, Settings, LogOut, Menu, X, FileSpreadsheet, Layers,
+  LayoutGrid, Send, Package, Megaphone, Users, CalendarClock, BarChart3, Upload, Settings, LogOut, Menu, X, FileSpreadsheet, Layers, ListChecks,
 } from 'lucide-react';
 import { useAuth, useProduct } from '../lib/context.jsx';
 import { api } from '../lib/api.js';
@@ -20,6 +20,7 @@ const NAV = [
   { to: '/importacoes', label: 'Importações', icon: Upload, admin: true },
   { to: '/configuracoes', label: 'Configurações', icon: Settings },
 ];
+const GUIDE = { to: '/guia-de-testes', label: 'Guia de testes', icon: ListChecks };
 
 function Logo() {
   return (
@@ -52,9 +53,16 @@ export default function Layout() {
     return null;
   };
 
+  const IS_TEST = !!window.__ALDEIA_TESTE__; // versão de testes publicada
+  const items = IS_TEST ? [GUIDE, ...NAV] : NAV;
   const sidebar = (
     <nav className="flex flex-col h-full">
       <div className="h-16 flex items-center px-3 border-b border-line"><Logo /></div>
+      {IS_TEST && (
+        <div className="mx-3 mt-3 rounded-lg bg-amber-50 ring-1 ring-amber-200 px-3 py-2 text-[12px] text-amber-900 leading-snug">
+          <b>Ambiente de testes</b> · dados fictícios, nenhuma mensagem é enviada.
+        </div>
+      )}
       <div className="px-3 pt-4 pb-2">
         <label className="text-[11px] font-medium uppercase tracking-wide text-muted px-1 flex items-center gap-1"><Layers className="size-3" />Produto</label>
         <select value={productId || ''} onChange={(e) => setProductId(Number(e.target.value) || null)}
@@ -64,7 +72,7 @@ export default function Layout() {
         </select>
       </div>
       <div className="flex-1 overflow-y-auto scroll-thin px-3 py-2 space-y-0.5">
-        {NAV.filter((n) => !n.admin || isAdmin).map((n) => {
+        {items.filter((n) => !n.admin || isAdmin).map((n) => {
           const b = n.badge ? badge(n.badge) : null;
           const count = typeof b === 'object' && b ? b.n : b;
           return (

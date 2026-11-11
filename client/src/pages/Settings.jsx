@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { UserPlus, Link2, Copy, Database, FlaskConical, Trash2, ShieldCheck } from 'lucide-react';
 import { api, download, copyText } from '../lib/api.js';
@@ -31,10 +31,15 @@ export default function SettingsPage() {
 
 function LinkBox({ link, onClose, title }) {
   const toast = useToast();
+  const nav = useNavigate();
+  const token = (link.match(/token=([^&]+)/) || [])[1];
   return (
     <Modal open onClose={onClose} title={title} footer={<Button variant="primary" onClick={onClose}>Concluir</Button>}>
       <p className="text-sm text-muted mb-3">Envie este link diretamente à usuária (válido por 2 horas, uso único). Ele não será exibido novamente.</p>
       <div className="flex gap-2"><Input readOnly value={link} onFocus={(e) => e.target.select()} /><Button icon={Copy} onClick={async () => { await copyText(link); toast('Link copiado'); }}>Copiar</Button></div>
+      {window.__ALDEIA_TESTE__ && token && (
+        <p className="text-[12px] text-muted mt-3">Na versão de testes o link não abre fora desta página. <button className="underline text-brand-700" onClick={() => { onClose(); nav(`/redefinir-senha?token=${token}`); }}>Abrir a tela de definição de senha aqui</button>.</p>
+      )}
     </Modal>
   );
 }
@@ -155,6 +160,16 @@ function DataTab() {
           )}
         </div>
       </Card>
+      {window.__ALDEIA_TESTE__ ? (
+      <Card>
+        <CardHeader title="Reiniciar ambiente de testes" subtitle="Apaga tudo o que foi feito nesta versão de testes (neste navegador) e recria a base de demonstração. Backups ficam disponíveis na versão oficial." />
+        <div className="px-5 pb-5">
+          <Button variant="danger" loading={busy === 'reset'} onClick={async () => {
+            if (await confirm({ title: 'Reiniciar ambiente de testes', message: 'Importações, campanhas, envios e alterações do teste serão apagados.', danger: true, confirmLabel: 'Reiniciar' })) { setBusy('reset'); await window.__ALDEIA_TESTE__.reset(); }
+          }}>Reiniciar ambiente</Button>
+        </div>
+      </Card>
+      ) : (
       <Card>
         <CardHeader title="Backup do banco de dados" subtitle="Cópia completa (pg_dump). Recomenda-se também o backup automático diário no servidor (npm run backup)." />
         <div className="px-5 pb-5 space-y-3">
@@ -162,6 +177,7 @@ function DataTab() {
           <p className="text-[12px] text-muted">Restauração: <code className="font-mono">pg_restore --clean --if-exists --no-owner -d $DATABASE_URL arquivo.dump</code></p>
         </div>
       </Card>
+      )}
     </div>
   );
 }

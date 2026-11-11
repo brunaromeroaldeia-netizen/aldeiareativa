@@ -7,3 +7,4 @@ backups/*
 .env
 *.log
 aldeia-reativa*.tar.gz
+dist-teste/

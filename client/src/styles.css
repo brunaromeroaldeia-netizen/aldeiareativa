@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@source "./";
+@source "../../sandbox";
 
 @theme {
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;

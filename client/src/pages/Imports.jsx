@@ -335,7 +335,7 @@ function Validation({ id, stats, products, busy, onBack, onCommit, onRemapProduc
                   <td className="px-2 py-2 min-w-44">
                     <Badge className={MATCH[r.match_type][1]}>{MATCH[r.match_type][0]}</Badge>
                     {r.dup_opportunity_id && <p className="text-[12px] text-amber-800 mt-1">Oportunidade idêntica já importada</p>}
-                    {r.candidates.map((c) => <p key={c.id} className="text-[12px] text-muted mt-1">↔ <Link to={`/contatos/${c.id}`} target="_blank" className="underline">{c.full_name}</Link> ({c.by.join(' e ')})</p>)}
+                    {r.candidates.map((c) => <p key={c.id} className="text-[12px] text-muted mt-1">↔ <Link to={`/contatos/${c.id}`} className="underline">{c.full_name}</Link> ({c.by.join(' e ')})</p>)}
                     {r.changes.map((c, i) => <p key={i} className="text-[12px] text-sky-800 mt-1">{c.label}: {c.from || '(vazio)'} → {c.to}</p>)}
                   </td>
                   <td className="px-2 py-2 text-[12px] min-w-48">{r.issues.filter((i) => i.msg !== 'Sem telefone' || filter === 'sem_telefone').map((i, k) => <p key={k} className={i.level === 'revisao' || i.level === 'erro' ? 'text-rose-700' : i.level === 'aviso' ? 'text-amber-800' : 'text-muted'}>{i.level !== 'info' && <AlertTriangle className="size-3 inline mr-1" />}{i.msg}</p>)}</td>

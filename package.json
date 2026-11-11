@@ -16,7 +16,8 @@
     "demo:load": "node scripts/demo.js load",
     "demo:remove": "node scripts/demo.js remove",
     "backup": "node scripts/backup.js",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "build:teste": "node scripts/build-sandbox.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -32,11 +33,15 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.16",
     "@fontsource-variable/inter": "^5.3.0",
+    "@noble/hashes": "^2.4.0",
     "@tailwindcss/vite": "^4.3.5",
     "@tanstack/react-query": "^5.107.1",
     "@vitejs/plugin-react": "^4.7.0",
+    "buffer": "^6.0.3",
     "lucide-react": "^1.72.0",
+    "path-browserify": "^1.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.30.6",

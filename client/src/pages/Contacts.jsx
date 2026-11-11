@@ -165,6 +165,8 @@ export function ContactDetail() {
   const [oppOpen, setOppOpen] = useState(false);
   const [adjust, setAdjust] = useState(null);
   const [addCampaign, setAddCampaign] = useState(false);
+  const [revokeOpen, setRevokeOpen] = useState(false);
+  const [revokeReason, setRevokeReason] = useState('');
   if (isLoading) return <Loading />;
   if (error) return <Alert tone="danger">{error.message}</Alert>;
   const { contact: c, opportunities, participations } = data;
@@ -174,10 +176,8 @@ export function ContactDetail() {
     if (!(await confirm({ title: 'Registrar pedido de não contato', message: 'O contato será bloqueado para todas as campanhas atuais e futuras. Follow-ups pendentes serão cancelados.', danger: true, confirmLabel: 'Bloquear' }))) return;
     try { await api.post(`/contacts/${id}/opt-out`, { reason: 'Pedido registrado na ficha do contato' }); toast('Opt-out registrado'); refresh(); } catch (e) { toast(e.message, 'error'); }
   };
-  const revoke = async () => {
-    const reason = window.prompt('Motivo da liberação (ex.: cliente pediu para voltar a receber ofertas):');
-    if (!reason) return;
-    try { await api.del(`/contacts/${id}/opt-out`, { reason }); toast('Bloqueio removido'); refresh(); } catch (e) { toast(e.message, 'error'); }
+  const revoke = async (reason) => {
+    try { await api.del(`/contacts/${id}/opt-out`, { reason }); toast('Bloqueio removido'); setRevokeOpen(false); refresh(); } catch (e) { toast(e.message, 'error'); }
   };
   const anonymize = async () => {
     if (!(await confirm({ title: 'Anonimizar contato (LGPD)', message: 'Nome, telefone, e-mail, empresa, observações e textos de mensagens serão apagados definitivamente. Os números agregados permanecem. Não pode ser desfeito.', danger: true, confirmLabel: 'Anonimizar' }))) return;
@@ -193,7 +193,7 @@ export function ContactDetail() {
           <>
             <Button icon={Pencil} onClick={() => setEdit(true)}>Editar</Button>
             <Button icon={Megaphone} onClick={() => setAddCampaign(true)} disabled={c.do_not_contact}>Incluir em campanha</Button>
-            {c.do_not_contact ? <Button onClick={revoke}>Remover bloqueio</Button> : <Button variant="danger" icon={Ban} onClick={optOut}>Não contatar</Button>}
+            {c.do_not_contact ? <Button onClick={() => setRevokeOpen(true)}>Remover bloqueio</Button> : <Button variant="danger" icon={Ban} onClick={optOut}>Não contatar</Button>}
           </>
         )} />
       {c.do_not_contact && <Alert tone="danger" title="Não contatar (opt-out)">Registrado em {fmtDateTime(c.dnc_at)}{c.dnc_by_name ? ` por ${c.dnc_by_name}` : ''}. {c.dnc_reason}</Alert>}
@@ -264,6 +264,10 @@ export function ContactDetail() {
       {edit && <EditContactModal c={c} onClose={() => setEdit(false)} onSaved={() => { setEdit(false); refresh(); }} />}
       {oppOpen && <AddOppModal id={id} products={products} years={years} onClose={() => setOppOpen(false)} onSaved={() => { setOppOpen(false); refresh(); }} />}
       {adjust && <AdjustOppModal o={adjust} products={products} onClose={() => setAdjust(null)} onSaved={() => { setAdjust(null); refresh(); }} />}
+      <Modal open={revokeOpen} onClose={() => setRevokeOpen(false)} title="Remover bloqueio de comunicação"
+        footer={<><Button onClick={() => setRevokeOpen(false)}>Cancelar</Button><Button variant="primary" disabled={revokeReason.trim().length < 5} onClick={() => revoke(revokeReason)}>Remover bloqueio</Button></>}>
+        <Field label="Motivo da liberação" hint="Fica registrado na auditoria. Ex.: cliente pediu para voltar a receber ofertas."><Input value={revokeReason} onChange={(e) => setRevokeReason(e.target.value)} /></Field>
+      </Modal>
       {addCampaign && <AddToCampaignModal contactId={Number(id)} opportunities={opportunities} onClose={() => setAddCampaign(false)} onSaved={() => { setAddCampaign(false); refresh(); }} />}
     </div>
   );
