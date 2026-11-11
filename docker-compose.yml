@@ -1,0 +1,55 @@
+# Produção em um servidor:  cp .env.example .env  (ajuste)  &&  docker compose up -d --build
+# Em seguida:               docker compose exec app npm run setup
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aldeia_reativa
+      POSTGRES_USER: aldeia
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aldeia"]
+      interval: 10s
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://aldeia:${POSTGRES_PASSWORD}@db:5432/aldeia_reativa
+    ports:
+      - "127.0.0.1:3000:3000"   # publique via proxy HTTPS (Caddy, Nginx…)
+    volumes:
+      - uploads:/app/uploads
+      - ./backups:/app/backups
+
+  # Backup diário (03h) do banco em ./backups, mantendo 30 dias
+  backup:
+    image: postgres:16
+    restart: unless-stopped
+    depends_on: [db]
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./backups:/backups
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        while true; do
+          if [ "$$(date +%H%M)" = "0300" ]; then
+            pg_dump -h db -U aldeia -Fc aldeia_reativa > /backups/aldeia-reativa-$$(date +%F).dump
+            find /backups -name '*.dump' -mtime +30 -delete
+            sleep 61
+          fi
+          sleep 30
+        done
+
+volumes:
+  pgdata:
+  uploads:

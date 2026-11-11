@@ -1,0 +1,47 @@
+{
+  "name": "aldeia-reativa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Aldeia Reativa — plataforma de reativação comercial da Aldeia Coworking",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "NODE_ENV=development node --watch-path=server server/index.js",
+    "build": "vite build",
+    "start": "NODE_ENV=production node server/index.js",
+    "migrate": "node server/migrate.js",
+    "setup": "node scripts/setup-users.js",
+    "demo:load": "node scripts/demo.js load",
+    "demo:remove": "node scripts/demo.js remove",
+    "backup": "node scripts/backup.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^18.0.10",
+    "express": "^4.22.3",
+    "express-rate-limit": "^8.7.4",
+    "helmet": "^8.3.0",
+    "multer": "^2.5.0",
+    "nodemailer": "^10.5.0",
+    "pg": "^8.23.1",
+    "xlsx": "^0.18.5",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "@tailwindcss/vite": "^4.3.5",
+    "@tanstack/react-query": "^5.107.1",
+    "@vitejs/plugin-react": "^4.7.0",
+    "lucide-react": "^1.72.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.30.6",
+    "recharts": "^2.15.4",
+    "tailwindcss": "^4.3.5",
+    "vite": "^6.4.6"
+  }
+}
