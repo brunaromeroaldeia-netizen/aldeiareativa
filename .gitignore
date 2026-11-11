@@ -6,3 +6,4 @@ backups/*
 !backups/.gitkeep
 .env
 *.log
+aldeia-reativa*.tar.gz
