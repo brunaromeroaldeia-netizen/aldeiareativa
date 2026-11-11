@@ -161,8 +161,8 @@ function TemplateModal({ template, campaignId, campaign, onClose, onSaved }) {
               </Select>
             </div>
           </Field>
-          <div className="rounded-2xl bg-[#e7ded3] p-4 min-h-64">
-            <div className="ml-auto max-w-[90%] rounded-xl rounded-tr-sm bg-[#d9fdd3] px-3 py-2 shadow-sm text-[14px] wa-text">
+          <div className="wa-chat rounded-2xl p-4 min-h-64">
+            <div className="wa-bubble ml-auto max-w-[90%] rounded-xl rounded-tr-sm px-3 py-2 shadow-sm text-[14px] wa-text">
               {preview?.text || <span className="text-muted"><Eye className="size-4 inline mr-1" />A pré-visualização aparece aqui.</span>}
             </div>
           </div>

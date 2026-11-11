@@ -1,7 +1,10 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import '@fontsource-variable/inter';
+import '@fontsource-variable/dm-sans/wght.css';
+import '@fontsource/archivo/latin-600.css';
+import '@fontsource/archivo/latin-700.css';
+import '@fontsource/archivo/latin-800.css';
 import './styles.css';
 import { AuthProvider, ProductProvider, useAuth } from './lib/context.jsx';
 import { ToastProvider, Loading } from './components/ui.jsx';

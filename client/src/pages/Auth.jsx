@@ -4,21 +4,28 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/context.jsx';
 import { Button, Input, Field, Alert, Loading } from '../components/ui.jsx';
+import { Logo } from '../components/Layout.jsx';
 
 function Shell({ title, subtitle, children }) {
   return (
-    <div className="min-h-full flex items-center justify-center px-4 py-10 bg-canvas">
-      <div className="w-full max-w-sm">
-        <div className="flex items-center gap-2.5 mb-8 justify-center">
-          <div className="size-10 rounded-xl bg-brand-600 flex items-center justify-center">
-            <svg viewBox="0 0 32 32" className="size-6"><path d="M7 23 16 8l9 15" stroke="white" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" /><circle cx="16" cy="19" r="2" fill="white" /></svg>
-          </div>
-          <div><p className="font-semibold tracking-tight text-lg leading-tight">Aldeia Reativa</p><p className="text-xs text-muted">Aldeia Coworking</p></div>
+    <div className="min-h-full grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] bg-canvas">
+      <aside className="hidden lg:flex flex-col justify-between bg-side text-[#fff] border-l-[6px] border-brand-500 px-12 py-12">
+        <Logo dark size={48} />
+        <div className="max-w-md">
+          <span className="block w-10 h-[5px] bg-brand-500 mb-5" />
+          <p className="font-display text-[40px] leading-[1.05] font-extrabold tracking-[-0.03em]">Leads antigos,<br />novas oportunidades.</p>
+          <p className="text-side-text mt-4 text-[15px] leading-relaxed">Base comercial permanente, campanhas de reativação e acompanhamento da operação de vendas da Aldeia.</p>
         </div>
-        <div className="bg-white rounded-2xl ring-1 ring-line shadow-sm p-6">
-          <h1 className="text-lg font-semibold">{title}</h1>
-          {subtitle && <p className="text-sm text-muted mt-1">{subtitle}</p>}
-          <div className="mt-5">{children}</div>
+        <p className="text-[12px] text-side-faint">Aldeia Coworking · uso interno</p>
+      </aside>
+      <div className="flex items-center justify-center px-4 py-10">
+        <div className="w-full max-w-sm">
+          <div className="lg:hidden flex justify-center mb-8"><Logo /></div>
+          <div className="bg-white rounded-2xl ring-1 ring-line p-6">
+            <h1 className="page-title font-display text-[24px] font-extrabold tracking-[-0.02em]">{title}</h1>
+            {subtitle && <p className="text-sm text-muted mt-1">{subtitle}</p>}
+            <div className="mt-5">{children}</div>
+          </div>
         </div>
       </div>
     </div>
@@ -48,11 +55,11 @@ export function Login() {
       </form>
       {testUsers && (
         <div className="mt-6 pt-5 border-t border-line">
-          <p className="text-[12px] font-semibold uppercase tracking-wide text-amber-700">Versão de testes · entrar como</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">Versão de testes · entrar como</p>
           <div className="mt-2 grid gap-2">
             {testUsers.map((u) => (
               <button key={u.email} type="button" disabled={loading} onClick={() => { setEmail(u.email); setPassword(u.password); doLogin(u.email, u.password); }}
-                className="text-left rounded-lg ring-1 ring-line px-3 py-2 hover:bg-stone-50 disabled:opacity-50">
+                className="text-left rounded-xl ring-1 ring-line px-3 py-2 hover:ring-ink hover:bg-brand-50 disabled:opacity-50">
                 <span className="text-sm font-medium block">{u.label}</span>
                 <span className="text-[12px] text-muted">{u.email} · {u.password}</span>
               </button>

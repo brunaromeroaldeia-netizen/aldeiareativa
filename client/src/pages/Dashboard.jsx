@@ -10,7 +10,8 @@ import { Card, CardHeader, PageHeader, Kpi, Loading, Select, Input, Button, Camp
 import { useFilterOptions } from './Operation.jsx';
 
 // paleta categórica validada (ordem fixa) + tinta de texto neutra
-const C = { sent: '#2a78d6', resp: '#eb6834', conv: '#1baf7a', grid: '#ecebe7', axis: '#8a8984', brand: '#3f6b55' };
+const C = { sent: '#2a78d6', resp: '#eb6834', conv: '#1baf7a', grid: 'var(--c-chart-grid)', axis: 'var(--c-chart-axis)', brand: 'var(--c-text)' };
+const TIP = { borderRadius: 10, border: '1px solid var(--c-border)', background: 'var(--c-surface)', color: 'var(--c-text)', fontSize: 12 };
 const SELLER_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100'];
 
 const PRESETS = [
@@ -93,7 +94,7 @@ export default function Dashboard() {
                 <CartesianGrid stroke={C.grid} vertical={false} />
                 <XAxis dataKey="day" tickFormatter={(d) => d.slice(8, 10) + '/' + d.slice(5, 7)} tick={{ fontSize: 11, fill: C.axis }} axisLine={false} tickLine={false} minTickGap={20} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: C.axis }} axisLine={false} tickLine={false} />
-                <Tooltip labelFormatter={(d) => fmtDate(d)} contentStyle={{ borderRadius: 8, border: '1px solid #e7e5e0', fontSize: 12 }} />
+                <Tooltip labelFormatter={(d) => fmtDate(d)} contentStyle={TIP} />
                 <Legend iconType="plainline" wrapperStyle={{ fontSize: 12 }} />
                 <Line type="linear" dataKey="sent" name="Mensagens enviadas" stroke={C.sent} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
                 <Line type="linear" dataKey="responses" name="Respostas" stroke={C.resp} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
@@ -127,7 +128,7 @@ export default function Dashboard() {
                 <CartesianGrid stroke={C.grid} vertical={false} />
                 <XAxis dataKey="day" tickFormatter={(d) => d.slice(8, 10) + '/' + d.slice(5, 7)} tick={{ fontSize: 11, fill: C.axis }} axisLine={false} tickLine={false} minTickGap={20} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: C.axis }} axisLine={false} tickLine={false} />
-                <Tooltip labelFormatter={(d) => fmtDate(d)} formatter={(v, n, p) => [n === 'Conversões' ? `${v}${p.payload.revenue ? ` (${fmtMoney(p.payload.revenue, true)})` : ''}` : v, n]} contentStyle={{ borderRadius: 8, border: '1px solid #e7e5e0', fontSize: 12 }} cursor={{ fill: '#f4f3ef' }} />
+                <Tooltip labelFormatter={(d) => fmtDate(d)} formatter={(v, n, p) => [n === 'Conversões' ? `${v}${p.payload.revenue ? ` (${fmtMoney(p.payload.revenue, true)})` : ''}` : v, n]} contentStyle={TIP} cursor={{ fill: 'var(--c-surface-3)' }} />
                 <Bar dataKey="conversions" name="Conversões" fill={C.brand} radius={[4, 4, 0, 0]} maxBarSize={18} />
               </BarChart>
             </ResponsiveContainer>
@@ -180,12 +181,12 @@ function BreakdownCard({ title, rows, onPick }) {
         <ResponsiveContainer>
           <BarChart data={data} layout="vertical" margin={{ top: 0, right: 28, left: 8, bottom: 0 }} barCategoryGap={6}>
             <XAxis type="number" hide allowDecimals={false} />
-            <YAxis type="category" dataKey="label" width={110} tick={{ fontSize: 11.5, fill: '#52514e' }} axisLine={false} tickLine={false} tickFormatter={(v) => String(v).split(' /')[0]} />
-            <Tooltip cursor={{ fill: '#f4f3ef' }} contentStyle={{ borderRadius: 8, border: '1px solid #e7e5e0', fontSize: 12 }}
+            <YAxis type="category" dataKey="label" width={110} tick={{ fontSize: 11.5, fill: 'var(--c-text-2)' }} axisLine={false} tickLine={false} tickFormatter={(v) => String(v).split(' /')[0]} />
+            <Tooltip cursor={{ fill: 'var(--c-surface-3)' }} contentStyle={TIP}
               formatter={(v, n, p) => [`${v} (${fmtPct(p.payload.conversion_rate)} dos contatos com envio)`, 'Conversões']} />
             <Bar dataKey="converted" name="Conversões" radius={[0, 4, 4, 0]} maxBarSize={16} onClick={(d) => onPick(d)} cursor="pointer">
               {data.map((r, i) => <Cell key={i} fill={C.brand} />)}
-              <LabelList dataKey="converted" position="right" style={{ fontSize: 11, fill: '#52514e' }} />
+              <LabelList dataKey="converted" position="right" style={{ fontSize: 11, fill: 'var(--c-text-2)' }} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>

@@ -56,19 +56,19 @@ function Boot() {
     return <App Router={TestRouter} extraRoutes={extraRoutes} />;
   }
   return (
-    <div style={{ minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, fontFamily: 'system-ui, sans-serif', background: '#f6f5f2', color: '#1c1b19' }}>
+    <div style={{ minHeight: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, fontFamily: 'system-ui, sans-serif', background: '#111111', color: '#FFFFFF', borderLeft: '6px solid #FFC20E' }}>
       <div style={{ maxWidth: 420, textAlign: 'center' }}>
-        <div style={{ width: 48, height: 48, borderRadius: 12, background: '#2f5d4a', margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <svg viewBox="0 0 32 32" width="28" height="28"><path d="M7 23 16 8l9 15" stroke="white" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" /><circle cx="16" cy="19" r="2" fill="white" /></svg>
+        <div style={{ width: 48, height: 48, borderRadius: 12, background: '#FFC20E', margin: '0 auto 16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <svg viewBox="0 0 32 32" width="28" height="28"><path d="M7 23 16 8l9 15" stroke="#111111" strokeWidth="3" fill="none" strokeLinecap="round" strokeLinejoin="round" /><circle cx="16" cy="19" r="2" fill="#111111" /></svg>
         </div>
-        <p style={{ fontWeight: 600, fontSize: 18 }}>Aldeia Reativa · versão de testes</p>
+        <p style={{ fontWeight: 800, fontSize: 20, fontFamily: 'Archivo, system-ui, sans-serif' }}>Aldeia Reativa · versão de testes</p>
         {state.phase === 'loading' ? (
-          <p style={{ color: '#6b6a65', marginTop: 8 }}>{state.msg}<br /><small>Na primeira abertura leva alguns segundos.</small></p>
+          <p style={{ color: '#C8C8C8', marginTop: 8 }}>{state.msg}<br /><small>Na primeira abertura leva alguns segundos.</small></p>
         ) : (
-          <div style={{ marginTop: 12, color: '#9f1239', fontSize: 14 }}>
+          <div style={{ marginTop: 12, color: '#F2857B', fontSize: 14 }}>
             <p>Não foi possível iniciar o banco de dados de testes neste navegador.</p>
-            <p style={{ color: '#6b6a65', marginTop: 8 }}>{state.msg}</p>
-            <p style={{ color: '#6b6a65', marginTop: 8 }}>Tente recarregar a página ou abrir no Chrome ou Edge atualizados.</p>
+            <p style={{ color: '#C8C8C8', marginTop: 8 }}>{state.msg}</p>
+            <p style={{ color: '#C8C8C8', marginTop: 8 }}>Tente recarregar a página ou abrir no Chrome ou Edge atualizados.</p>
           </div>
         )}
       </div>

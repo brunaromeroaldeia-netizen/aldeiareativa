@@ -2,29 +2,157 @@
 @source "./";
 @source "../../sandbox";
 
+/*
+  Identidade visual Aldeia Coworking: preto + amarelo Aldeia (#FFC20E), cinzas quentes,
+  Archivo nos títulos e números, DM Sans no texto. Tokens semânticos (--c-*) com versão clara
+  e escura; a paleta do Tailwind usada nas telas aponta para esses tokens.
+*/
+:root {
+  --c-bg: #F1F0EC;
+  --c-surface: #FFFFFF;
+  --c-surface-2: #F7F7F4;
+  --c-surface-3: #EBEAE6;
+  --c-surface-4: #E0DFDA;
+  --c-border: #DADADA;
+  --c-border-strong: #C8C8C8;
+  --c-text: #111111;
+  --c-text-2: #4A4A4A;
+  --c-text-3: #8C8C8C;
+  --c-text-4: #6B6B6B;
+  --c-accent: #FFC20E;
+  --c-accent-strong: #E0B200;
+  --c-accent-soft: #FFF3CC;
+  --c-accent-softer: #FFF9E5;
+  --c-accent-ring: #FFE38A;
+  --c-accent-ink: #6B4F00;
+  --c-accent-ink-2: #4D3900;
+  --c-ok: #1F7A4C;   --c-ok-soft: #E3F1E8;   --c-ok-ring: #BFE0CC;
+  --c-warn: #B45309; --c-warn-soft: #FDEBD8; --c-warn-ring: #F6CFA5;
+  --c-crit: #C0261C; --c-crit-soft: #FBE2DF; --c-crit-ring: #F2BDB7;
+  --c-info: #2B56B0; --c-info-soft: #E6ECF8; --c-info-ring: #C3D1EF;
+  --c-urg: #15264A;  --c-urg-soft: #E2E7F2;  --c-urg-ring: #C2CCE0;
+  --c-plum: #6D3B8F; --c-plum-soft: #EFE6F5; --c-plum-ring: #D9C6E8;
+  --c-chart-grid: #E6E5E0;
+  --c-chart-axis: #8C8C8C;
+  --c-shadow: 0 1px 2px rgba(17, 17, 17, .06);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --c-bg: #0A0A0A; --c-surface: #141414; --c-surface-2: #1C1C1C; --c-surface-3: #2B2B2B; --c-surface-4: #333333;
+    --c-border: #2B2B2B; --c-border-strong: #3A3A3A;
+    --c-text: #FFFFFF; --c-text-2: #C8C8C8; --c-text-3: #8C8C8C; --c-text-4: #A8A8A8;
+    --c-accent: #FFC20E; --c-accent-strong: #FFD452; --c-accent-soft: #2E2610; --c-accent-softer: #1F1A0B; --c-accent-ring: #5C4A12;
+    --c-accent-ink: #FFC20E; --c-accent-ink-2: #FFD452;
+    --c-ok: #5CC48C;   --c-ok-soft: #14281D;   --c-ok-ring: #24452F;
+    --c-warn: #F59E4B; --c-warn-soft: #33210F; --c-warn-ring: #57381A;
+    --c-crit: #F2857B; --c-crit-soft: #3A1714; --c-crit-ring: #5E2722;
+    --c-info: #7FA3EE; --c-info-soft: #16213A; --c-info-ring: #263A63;
+    --c-urg: #9DB5F0;  --c-urg-soft: #18213A;  --c-urg-ring: #2A3A60;
+    --c-plum: #C9A3E6; --c-plum-soft: #24172E; --c-plum-ring: #3E2850;
+    --c-chart-grid: #262626; --c-chart-axis: #8C8C8C;
+    --c-shadow: none;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --c-bg: #0A0A0A; --c-surface: #141414; --c-surface-2: #1C1C1C; --c-surface-3: #2B2B2B; --c-surface-4: #333333;
+  --c-border: #2B2B2B; --c-border-strong: #3A3A3A;
+  --c-text: #FFFFFF; --c-text-2: #C8C8C8; --c-text-3: #8C8C8C; --c-text-4: #A8A8A8;
+  --c-accent: #FFC20E; --c-accent-strong: #FFD452; --c-accent-soft: #2E2610; --c-accent-softer: #1F1A0B; --c-accent-ring: #5C4A12;
+  --c-accent-ink: #FFC20E; --c-accent-ink-2: #FFD452;
+  --c-ok: #5CC48C;   --c-ok-soft: #14281D;   --c-ok-ring: #24452F;
+  --c-warn: #F59E4B; --c-warn-soft: #33210F; --c-warn-ring: #57381A;
+  --c-crit: #F2857B; --c-crit-soft: #3A1714; --c-crit-ring: #5E2722;
+  --c-info: #7FA3EE; --c-info-soft: #16213A; --c-info-ring: #263A63;
+  --c-urg: #9DB5F0;  --c-urg-soft: #18213A;  --c-urg-ring: #2A3A60;
+  --c-plum: #C9A3E6; --c-plum-soft: #24172E; --c-plum-ring: #3E2850;
+  --c-chart-grid: #262626; --c-chart-axis: #8C8C8C;
+  --c-shadow: none;
+  color-scheme: dark;
+}
+
 @theme {
-  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --color-brand-50: #eef4f0;
-  --color-brand-100: #dbe8e0;
-  --color-brand-200: #b8d1c2;
-  --color-brand-500: #3f6b55;
-  --color-brand-600: #2f5d4a;
-  --color-brand-700: #244a3a;
-  --color-brand-800: #1b382c;
-  --color-ink: #1c1b19;
-  --color-muted: #6b6a65;
-  --color-line: #e7e5e0;
-  --color-canvas: #f6f5f2;
+  --font-sans: "DM Sans Variable", "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-display: "Archivo", "DM Sans Variable", Arial, sans-serif;
+
+  /* superfícies e texto */
+  --color-canvas: var(--c-bg);
+  --color-white: var(--c-surface);
+  --color-ink: var(--c-text);
+  --color-muted: var(--c-text-2);
+  --color-faint: var(--c-text-3);
+  --color-line: var(--c-border);
+  --color-stone-50: var(--c-surface-2);
+  --color-stone-100: var(--c-surface-3);
+  --color-stone-200: var(--c-surface-4);
+  --color-stone-300: var(--c-border-strong);
+  --color-stone-400: var(--c-text-3);
+  --color-stone-500: var(--c-text-3);
+  --color-stone-600: var(--c-text-4);
+  --color-stone-700: var(--c-text-2);
+
+  /* amarelo Aldeia */
+  --color-brand-50: var(--c-accent-softer);
+  --color-brand-100: var(--c-accent-soft);
+  --color-brand-200: var(--c-accent-ring);
+  --color-brand-400: var(--c-accent-strong);
+  --color-brand-500: var(--c-accent);
+  --color-brand-600: var(--c-text);
+  --color-brand-700: var(--c-accent-ink);
+  --color-brand-800: var(--c-accent-ink-2);
+  --color-accent: var(--c-accent);
+
+  /* status */
+  --color-emerald-50: var(--c-ok-soft);   --color-emerald-200: var(--c-ok-ring);   --color-emerald-500: var(--c-ok);   --color-emerald-700: var(--c-ok);   --color-emerald-800: var(--c-ok);   --color-emerald-900: var(--c-ok);
+  --color-amber-50: var(--c-warn-soft);   --color-amber-100: var(--c-warn-soft);   --color-amber-200: var(--c-warn-ring);  --color-amber-500: var(--c-warn);  --color-amber-700: var(--c-warn); --color-amber-800: var(--c-warn); --color-amber-900: var(--c-warn);
+  --color-rose-50: var(--c-crit-soft);    --color-rose-100: var(--c-crit-soft);    --color-rose-200: var(--c-crit-ring);   --color-rose-300: var(--c-crit-ring); --color-rose-500: var(--c-crit); --color-rose-600: var(--c-crit); --color-rose-700: var(--c-crit); --color-rose-900: var(--c-crit);
+  --color-sky-50: var(--c-info-soft);     --color-sky-200: var(--c-info-ring);     --color-sky-500: var(--c-info);     --color-sky-700: var(--c-info);    --color-sky-800: var(--c-info);   --color-sky-900: var(--c-info);
+  --color-indigo-50: var(--c-urg-soft);   --color-indigo-200: var(--c-urg-ring);   --color-indigo-800: var(--c-urg);
+  --color-teal-50: var(--c-ok-soft);      --color-teal-200: var(--c-ok-ring);      --color-teal-800: var(--c-ok);
+  --color-violet-50: var(--c-plum-soft);  --color-violet-200: var(--c-plum-ring);  --color-violet-500: var(--c-plum); --color-violet-800: var(--c-plum);
+
+  /* menu lateral (sempre escuro) */
+  --color-side: #111111;
+  --color-side-hover: #1C1C1C;
+  --color-side-on: #2B2B2B;
+  --color-side-text: #C8C8C8;
+  --color-side-faint: #8C8C8C;
+  --color-side-line: #2B2B2B;
 }
 
 html, body, #root { height: 100%; }
-body { background: var(--color-canvas); color: var(--color-ink); -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01"; }
+body {
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { font-family: var(--font-display); letter-spacing: -.01em; }
+:focus-visible { outline: 2px solid var(--c-text); outline-offset: 2px; }
+::selection { background: var(--c-accent); color: #111111; }
 
 .tabular { font-variant-numeric: tabular-nums; }
 .scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
-.scroll-thin::-webkit-scrollbar-thumb { background: #d6d3cc; border-radius: 8px; }
+.scroll-thin::-webkit-scrollbar-thumb { background: var(--c-border-strong); border-radius: 8px; }
 .wa-text { white-space: pre-wrap; word-break: break-word; }
+.logo-mask {
+  display: block; flex: none; background: currentColor;
+  -webkit-mask: url("./assets/aldeia-logo.png") center / contain no-repeat;
+  mask: url("./assets/aldeia-logo.png") center / contain no-repeat;
+}
+/* faixa amarela sobre o título da página, como no restante dos sistemas Aldeia */
+.page-title::before { content: ""; display: block; width: 40px; height: 5px; background: var(--c-accent); margin-bottom: 12px; }
+/* bolha de WhatsApp na pré-visualização */
+.wa-chat { background: #E7DED3; }
+.wa-bubble { background: #D9FDD3; color: #111111; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .wa-chat { background: #0B141A; } :root:not([data-theme="light"]) .wa-bubble { background: #005C4B; color: #E9EDEF; } }
+:root[data-theme="dark"] .wa-chat { background: #0B141A; }
+:root[data-theme="dark"] .wa-bubble { background: #005C4B; color: #E9EDEF; }
+
 @keyframes slide-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
 .animate-slide-in { animation: slide-in .18s ease-out; }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 .animate-fade-in { animation: fade-in .15s ease-out; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }

@@ -7,7 +7,7 @@ export const STATUS = {
   interesse: { label: 'Interesse', long: 'Demonstrou interesse', cls: 'bg-emerald-50 text-emerald-800 ring-emerald-200' },
   retorno_futuro: { label: 'Retorno futuro', long: 'Quer conversar futuramente', cls: 'bg-indigo-50 text-indigo-800 ring-indigo-200' },
   negociacao: { label: 'Em negociação', long: 'Em negociação', cls: 'bg-teal-50 text-teal-800 ring-teal-200' },
-  convertido: { label: 'Convertido', long: 'Convertido', cls: 'bg-brand-600 text-white ring-brand-600' },
+  convertido: { label: 'Convertido', long: 'Convertido', cls: 'bg-brand-500 text-[#111] ring-brand-500 font-semibold' },
   sem_interesse: { label: 'Sem interesse', long: 'Sem interesse', cls: 'bg-stone-100 text-stone-500 ring-stone-200' },
   sem_resposta: { label: 'Sem resposta', long: 'Sem resposta após tentativas', cls: 'bg-stone-100 text-stone-500 ring-stone-200' },
   opt_out: { label: 'Não contatar', long: 'Não contatar / opt-out', cls: 'bg-rose-50 text-rose-700 ring-rose-200' },

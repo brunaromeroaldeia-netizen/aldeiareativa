@@ -38,7 +38,7 @@ export default defineConfig({
     target: 'es2022',
     chunkSizeWarningLimit: 5000,
     // fontes embutidas na página; binários do banco ficam como arquivos separados
-    assetsInlineLimit: (file) => /\.(woff2?|svg)$/.test(file),
+    assetsInlineLimit: (file) => /\.(woff2?|svg|png)$/.test(file),
     rollupOptions: { output: { inlineDynamicImports: true } },
   },
 });

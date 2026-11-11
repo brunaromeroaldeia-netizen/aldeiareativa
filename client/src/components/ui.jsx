@@ -6,15 +6,15 @@ export const cx = (...a) => a.filter(Boolean).join(' ');
 
 export function Button({ variant = 'secondary', size = 'md', loading, icon: Icon, children, className, ...props }) {
   const v = {
-    primary: 'bg-brand-600 text-white hover:bg-brand-700 shadow-sm disabled:bg-brand-600/50',
-    secondary: 'bg-white text-ink ring-1 ring-inset ring-line hover:bg-stone-50 shadow-xs disabled:text-muted',
-    ghost: 'text-muted hover:text-ink hover:bg-stone-100',
-    danger: 'bg-white text-rose-700 ring-1 ring-inset ring-rose-200 hover:bg-rose-50',
-    dark: 'bg-ink text-white hover:bg-black',
+    primary: 'bg-brand-500 text-[#111] hover:bg-brand-400 disabled:opacity-45',
+    secondary: 'bg-white text-ink ring-1 ring-inset ring-stone-300 hover:bg-stone-50 disabled:opacity-45',
+    ghost: 'text-muted hover:text-ink hover:bg-stone-100 disabled:opacity-45',
+    danger: 'bg-white text-rose-700 ring-1 ring-inset ring-rose-200 hover:bg-rose-50 disabled:opacity-45',
+    dark: 'bg-ink text-white hover:opacity-90 disabled:opacity-45',
   }[variant];
-  const s = { sm: 'h-8 px-2.5 text-[13px] gap-1.5', md: 'h-9 px-3.5 text-sm gap-2', lg: 'h-11 px-5 text-[15px] gap-2' }[size];
+  const s = { sm: 'h-8 px-3 text-[12.5px] gap-1.5', md: 'h-9 px-4 text-[13px] gap-2', lg: 'h-11 px-5 text-[14.5px] gap-2' }[size];
   return (
-    <button className={cx('inline-flex items-center justify-center rounded-lg font-medium transition-colors whitespace-nowrap disabled:cursor-not-allowed', v, s, className)}
+    <button className={cx('inline-flex items-center justify-center rounded-full font-semibold transition-colors whitespace-nowrap disabled:cursor-not-allowed', v, s, className)}
       disabled={loading || props.disabled} {...props}>
       {loading ? <Loader2 className="size-4 animate-spin" /> : Icon ? <Icon className="size-4 shrink-0" strokeWidth={2} /> : null}
       {children}
@@ -23,14 +23,14 @@ export function Button({ variant = 'secondary', size = 'md', loading, icon: Icon
 }
 
 export function Card({ className, children, ...p }) {
-  return <div className={cx('rounded-xl bg-white ring-1 ring-line shadow-[0_1px_2px_rgba(0,0,0,0.03)]', className)} {...p}>{children}</div>;
+  return <div className={cx('rounded-xl bg-white ring-1 ring-line shadow-[var(--c-shadow)]', className)} {...p}>{children}</div>;
 }
 
 export function CardHeader({ title, subtitle, actions, className }) {
   return (
     <div className={cx('flex items-start justify-between gap-3 px-5 pt-4 pb-3', className)}>
       <div className="min-w-0">
-        <h3 className="text-[15px] font-semibold text-ink">{title}</h3>
+        <h3 className="font-display text-[15.5px] font-bold text-ink">{title}</h3>
         {subtitle && <p className="text-[13px] text-muted mt-0.5">{subtitle}</p>}
       </div>
       {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
@@ -39,7 +39,7 @@ export function CardHeader({ title, subtitle, actions, className }) {
 }
 
 export function Badge({ className, children }) {
-  return <span className={cx('inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] font-medium ring-1 ring-inset whitespace-nowrap', className)}>{children}</span>;
+  return <span className={cx('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-medium ring-1 ring-inset whitespace-nowrap', className)}>{children}</span>;
 }
 export const StatusBadge = ({ status, long }) => <Badge className={STATUS[status]?.cls}>{long ? STATUS[status]?.long : STATUS[status]?.label || status}</Badge>;
 export const HistBadge = ({ status }) => (status ? <Badge className={HIST[status]?.cls}>{HIST[status]?.label}</Badge> : <span className="text-muted">—</span>);
@@ -58,7 +58,7 @@ export function Field({ label, hint, error, children, className }) {
 }
 
 const widthOf = (c) => (/(^|\s)(!?w-|max-w-|flex-1)/.test(c || '') ? '' : 'w-full ');
-const inputCls = 'rounded-lg bg-white ring-1 ring-inset ring-line px-3 h-9 text-sm text-ink placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:bg-stone-50';
+const inputCls = 'rounded-lg bg-white ring-1 ring-inset ring-stone-300 px-3 h-9 text-sm text-ink placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-ink disabled:opacity-60';
 export const Input = forwardRef(({ className, ...p }, ref) => <input ref={ref} className={cx(widthOf(className) + inputCls, className)} {...p} />);
 export const Textarea = forwardRef(({ className, ...p }, ref) => <textarea ref={ref} className={cx('w-full', inputCls, 'h-auto py-2 leading-relaxed', className)} {...p} />);
 export function Select({ className, children, ...p }) {
@@ -68,7 +68,7 @@ export function Select({ className, children, ...p }) {
 export function Checkbox({ checked, onChange, label, className, disabled }) {
   return (
     <label className={cx('inline-flex items-center gap-2 text-sm cursor-pointer select-none', disabled && 'opacity-50 cursor-not-allowed', className)}>
-      <input type="checkbox" className="size-4 rounded border-stone-300 accent-brand-600" checked={!!checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+      <input type="checkbox" className="size-4 rounded border-stone-300 accent-[var(--c-text)]" checked={!!checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
       {label}
     </label>
   );
@@ -84,7 +84,7 @@ export function ChipSelect({ options, value = [], onChange, className }) {
         return (
           <button type="button" key={String(o.value)} onClick={() => toggle(o.value)}
             className={cx('h-8 px-3 rounded-full text-[13px] ring-1 ring-inset transition-colors inline-flex items-center gap-1.5',
-              on ? 'bg-brand-600 text-white ring-brand-600' : 'bg-white text-ink ring-line hover:bg-stone-50')}>
+              on ? 'bg-brand-500 text-[#111] ring-brand-500 font-semibold' : 'bg-white text-muted ring-stone-300 hover:bg-stone-50 hover:text-ink')}>
             {on && <Check className="size-3.5" />}{o.label}
           </button>
         );
@@ -139,7 +139,7 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }) {
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
       <div className={cx('relative w-full bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[92vh] flex flex-col', w)}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-line">
-          <h2 className="font-semibold text-ink">{title}</h2>
+          <h2 className="font-display font-bold text-ink">{title}</h2>
           <button onClick={onClose} className="text-muted hover:text-ink p-1 rounded-md" aria-label="Fechar"><X className="size-5" /></button>
         </div>
         <div className="px-5 py-4 overflow-y-auto scroll-thin">{children}</div>
@@ -170,14 +170,14 @@ export function Tabs({ tabs, value, onChange, className }) {
     <div className={cx('flex gap-1 overflow-x-auto scroll-thin border-b border-line', className)}>
       {tabs.map((t) => (
         <button key={t.value} onClick={() => onChange(t.value)}
-          className={cx('relative h-10 px-3 text-sm whitespace-nowrap font-medium transition-colors inline-flex items-center gap-2',
-            value === t.value ? 'text-ink' : 'text-muted hover:text-ink')}>
+          className={cx('relative h-10 px-3 text-sm whitespace-nowrap transition-colors inline-flex items-center gap-2',
+            value === t.value ? 'text-ink font-bold' : 'text-muted font-medium hover:text-ink')}>
           {t.icon && <t.icon className="size-4" />}
           {t.label}
           {t.count !== undefined && t.count !== null && (
             <span className={cx('rounded-full px-1.5 text-[11px] tabular leading-5', t.tone === 'danger' && t.count ? 'bg-rose-100 text-rose-700' : t.tone === 'warning' && t.count ? 'bg-amber-100 text-amber-800' : 'bg-stone-100 text-muted')}>{t.count}</span>
           )}
-          {value === t.value && <span className="absolute left-2 right-2 -bottom-px h-0.5 bg-brand-600 rounded-full" />}
+          {value === t.value && <span className="absolute left-2 right-2 -bottom-px h-[3px] bg-brand-500" />}
         </button>
       ))}
     </div>
@@ -188,9 +188,9 @@ export function Kpi({ label, value, sub, onClick, tone, hint }) {
   const C = onClick ? 'button' : 'div';
   return (
     <C onClick={onClick} title={hint}
-      className={cx('text-left rounded-xl bg-white ring-1 ring-line px-4 py-3.5 transition-shadow min-w-0', onClick && 'hover:ring-brand-200 hover:shadow-sm cursor-pointer')}>
+      className={cx('text-left rounded-xl bg-white ring-1 ring-line border-t-[3px] px-4 pt-3 pb-3.5 transition-shadow min-w-0', tone === 'danger' ? 'border-rose-600' : tone === 'warn' ? 'border-amber-700' : tone === 'brand' ? 'border-brand-500' : 'border-ink', onClick && 'hover:shadow-md cursor-pointer')}>
       <p className="text-[12.5px] text-muted leading-snug line-clamp-2">{label}</p>
-      <p className={cx('text-[22px] font-semibold tabular tracking-tight mt-0.5', tone === 'danger' ? 'text-rose-600' : tone === 'brand' ? 'text-brand-700' : 'text-ink')}>{value}</p>
+      <p className={cx('font-display font-extrabold tabular tracking-tight leading-tight mt-0.5 whitespace-nowrap', String(value).length > 8 ? 'text-[20px]' : 'text-[26px]', tone === 'danger' ? 'text-rose-600' : 'text-ink')}>{value}</p>
       {sub && <p className="text-[12px] text-muted mt-0.5 leading-snug line-clamp-2">{sub}</p>}
     </C>
   );
@@ -214,7 +214,7 @@ export function Progress({ value, max, className, tone = 'brand' }) {
   const pct = max ? Math.min(100, (value / max) * 100) : 0;
   return (
     <div className={cx('h-1.5 rounded-full bg-stone-100 overflow-hidden', className)}>
-      <div className={cx('h-full rounded-full transition-all', tone === 'brand' ? 'bg-brand-500' : 'bg-amber-500')} style={{ width: `${pct}%` }} />
+      <div className={cx('h-full rounded-full transition-all', tone === 'brand' ? 'bg-ink' : 'bg-amber-500')} style={{ width: `${pct}%` }} />
     </div>
   );
 }
@@ -223,7 +223,7 @@ export function PageHeader({ title, subtitle, actions, children }) {
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-5">
       <div className="min-w-0">
-        <h1 className="text-[22px] font-semibold tracking-tight text-ink">{title}</h1>
+        <h1 className="page-title font-display text-[28px] leading-[1.08] font-extrabold tracking-[-0.02em] text-ink">{title}</h1>
         {subtitle && <p className="text-sm text-muted mt-0.5">{subtitle}</p>}
         {children}
       </div>

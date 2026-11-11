@@ -43,12 +43,12 @@ export default function Overview() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {tiles.map((t) => (
-          <Link key={t.label} to={t.to} className="group rounded-xl bg-white ring-1 ring-line px-4 py-4 hover:ring-brand-200 hover:shadow-sm transition">
+          <Link key={t.label} to={t.to} className={cx('group rounded-xl bg-white ring-1 ring-line border-t-[3px] px-4 py-4 hover:shadow-md transition', t.tone === 'danger' && t.value ? 'border-rose-600' : t.tone === 'warning' && t.value ? 'border-amber-700' : 'border-ink')}>
             <div className="flex items-center justify-between">
               <p className="text-[13px] text-muted">{t.label}</p>
               <t.icon className={cx('size-4', t.tone === 'danger' && t.value ? 'text-rose-500' : t.tone === 'warning' && t.value ? 'text-amber-500' : 'text-stone-400')} />
             </div>
-            <p className={cx('text-3xl font-semibold tabular mt-1 tracking-tight', t.tone === 'danger' && t.value ? 'text-rose-600' : '')}>{fmtInt(t.value)}</p>
+            <p className={cx('font-display text-[30px] font-extrabold tabular mt-1 tracking-tight', t.tone === 'danger' && t.value ? 'text-rose-600' : '')}>{fmtInt(t.value)}</p>
             <p className="text-[12px] text-brand-700 mt-1 opacity-0 group-hover:opacity-100 transition flex items-center gap-1">Abrir fila <ArrowRight className="size-3" /></p>
           </Link>
         ))}
