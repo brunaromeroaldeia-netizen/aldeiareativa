@@ -10,6 +10,7 @@ import { loadUser, requireAuth, requireAdmin } from './auth.js';
 import { HttpError } from './lib/http.js';
 import { startScheduler, runScheduler } from './services/scheduler.js';
 import { ensureBlackFridayCampaign } from './services/blackFriday.js';
+import { saveDailyBackup } from './services/backup.js';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import productRoutes from './routes/products.js';
@@ -49,7 +50,12 @@ export async function createApp() {
   // rotina diária agendada pela Vercel (protegida pelo CRON_SECRET)
   api.get('/cron/agenda', async (req, res, next) => {
     if (!config.cronSecret || req.get('authorization') !== `Bearer ${config.cronSecret}`) return next(new HttpError(401, 'Não autorizado.'));
-    try { res.json(await runScheduler()); } catch (e) { next(e); }
+    try {
+      const agenda = await runScheduler();
+      let backup;
+      try { backup = await saveDailyBackup(); } catch (e) { console.error('[backup] falhou', e); backup = { error: e.message }; }
+      res.json({ agenda, backup });
+    } catch (e) { next(e); }
   });
   api.use(loadUser);
   // garante a agenda atualizada mesmo se o servidor ficou suspenso (no máximo 1x por minuto)

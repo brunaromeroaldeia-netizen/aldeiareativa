@@ -144,7 +144,16 @@ Pacote com 5 modelos (3 iniciais por status histórico, 2 follow-ups), condiçõ
 - **Site (Vercel):** importe o repositório. `vercel.json` já define build, rotas e a rotina diária (`/api/cron/agenda`). Variáveis de ambiente:
   `DATABASE_URL` (pooler do Supabase, modo *transaction*, porta 6543, usuária `aldeia_app.<ref do projeto>`), `NODE_ENV=production`, `SETUP_CODE`, `CRON_SECRET`, `ALLOW_DEMO=false`, `NODEJS_HELPERS=0`.
 - As migrações rodam sozinhas na primeira requisição (com trava, seguras com várias instâncias). A campanha Black Friday de Mesa é criada automaticamente como rascunho.
-- Limites: planilhas de até 4 MB por envio (limite da Vercel); backup em *Configurações › Dados e backup* sai em JSON compactado.
+- Limites: planilhas de até 4 MB por envio (limite da Vercel).
+
+### Backup (gratuito)
+- **Automático:** todo dia às 6h (horário de Brasília), junto com a rotina da agenda, o sistema gera uma cópia completa (`aldeia-reativa-AAAA-MM-DD.json.gz`) e guarda num **Vercel Blob privado**, separado do banco. Mantém os últimos 30 dias (`BACKUP_KEEP_DAYS`). Requer o Blob conectado ao projeto (variável `BLOB_READ_WRITE_TOKEN`, criada automaticamente pela Vercel).
+- **Manual:** *Configurações › Dados e backup* lista as cópias guardadas para download e permite baixar uma cópia na hora.
+- O arquivo é gerado pelo próprio Postgres (JSON sem perda: datas com precisão total, valores exatos, planilhas importadas incluídas).
+- **Restaurar** (substitui todos os dados atuais pelos do arquivo; tudo ou nada):
+  ```bash
+  DATABASE_URL=... npm run backup:restaurar -- aldeia-reativa-AAAA-MM-DD.json.gz --confirmar
+  ```
 
 ## Publicar o site oficial (Render)
 

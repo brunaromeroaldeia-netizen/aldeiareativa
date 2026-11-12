@@ -150,6 +150,49 @@ function ParamsTab() {
   );
 }
 
+const fmtSize = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
+const fmtDay = (d) => d.split('-').reverse().join('/');
+
+function BackupCard() {
+  const toast = useToast();
+  const { data, refetch, isLoading } = useQuery({ queryKey: ['backups'], queryFn: () => api.get('/admin/backups') });
+  const [busy, setBusy] = useState('');
+  const act = async (key, fn, msg) => { setBusy(key); try { await fn(); if (msg) toast(msg); refetch(); } catch (e) { toast(e.message, 'error'); } finally { setBusy(''); } };
+  const list = data?.backups || [];
+  return (
+    <Card>
+      <CardHeader title="Backup" subtitle="Cópia completa de todos os dados: contatos, campanhas, mensagens, envios, históricos e planilhas importadas." />
+      <div className="px-5 pb-5 space-y-4">
+        {data?.enabled ? (
+          <Alert tone="success">Backup automático ativo: uma cópia por dia (6h), guardada em armazenamento privado separado do banco, por 30 dias.</Alert>
+        ) : !isLoading && (
+          <Alert tone="warning">Backup automático não configurado neste servidor. Use o botão abaixo para baixar uma cópia.</Alert>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <Button icon={Database} loading={busy === 'bk'} onClick={() => act('bk', () => download('/admin/backup'), 'Backup baixado')}>Baixar cópia de agora</Button>
+          {data?.enabled && <Button variant="ghost" loading={busy === 'save'} onClick={() => act('save', () => api.post('/admin/backups'), 'Cópia de hoje guardada')}>Guardar cópia de hoje</Button>}
+        </div>
+        {data?.enabled && (
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted mb-2">Cópias guardadas</p>
+            {list.length === 0 ? <p className="text-sm text-muted">A primeira cópia automática será feita na próxima madrugada.</p> : (
+              <ul className="divide-y divide-line rounded-xl ring-1 ring-line max-h-72 overflow-auto">
+                {list.map((b) => (
+                  <li key={b.name} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                    <span><b>{fmtDay(b.date)}</b> <span className="text-muted">· {fmtSize(b.size)}</span></span>
+                    <Button size="sm" variant="ghost" loading={busy === b.name} onClick={() => act(b.name, () => download(`/admin/backups/${encodeURIComponent(b.name)}`))}>Baixar</Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+        <p className="text-[12px] text-muted">Os arquivos contêm dados pessoais: guarde-os em local seguro. Para restaurar uma cópia, peça ao responsável técnico (comando <code className="font-mono">npm run backup:restaurar</code>).</p>
+      </div>
+    </Card>
+  );
+}
+
 function DataTab() {
   const toast = useToast();
   const qc = useQueryClient();
@@ -185,12 +228,7 @@ function DataTab() {
         </div>
       </Card>
       ) : (
-      <Card>
-        <CardHeader title="Backup do banco de dados" subtitle="Cópia completa de todos os dados (contatos, campanhas, mensagens, históricos e planilhas importadas). Guarde o arquivo em local seguro: ele contém dados pessoais." />
-        <div className="px-5 pb-5 space-y-3">
-          <Button icon={Database} loading={busy === 'bk'} onClick={() => run('bk', () => download('/admin/backup'), 'Backup gerado')}>Baixar backup agora</Button>
-        </div>
-      </Card>
+      <BackupCard />
       )}
     </div>
   );
